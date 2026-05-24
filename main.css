@@ -67,7 +67,7 @@ img {
     image-rendering: pixelated;
 }
 
-.shop-holder {
+.shop-holder, #storage-table {
     color: #ffffff;
     font-size: 16px;
     max-width: 350px;
@@ -97,7 +97,7 @@ img {
     color: #ffffff;
 }
 
-#inventory-table, #storage-table, #quests-table, #completed-quests-table {
+#inventory-table, #quests-table, #completed-quests-table {
     border: 1px solid #555555;
     border-left: 2px solid #555555;
     border-right: 2px solid #555555;
@@ -180,6 +180,12 @@ img {
 
 .item-parent:hover {
     background-color: #444444;
+}
+
+.crafting-type {
+    font-weight: bold;
+    padding-left: 5px;
+    padding-right: 5px;
 }
 
 .item-text {

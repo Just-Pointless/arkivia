@@ -1,4 +1,4 @@
-const VERSION = "0.17"
+const VERSION = "0.18"
 
 document.getElementById("game-title").textContent = `Proto26 v${VERSION}`
 
@@ -272,14 +272,30 @@ const skillData = {
         "shortName": "Sword M",
         "desc": "Increases damage dealt with sword weapons",
         "scaling": 1.3,
+    },
+    "alchemy": {
+        "name": "Alchemy",
+        "desc": "Increases speed of alchemy and unlocks more recipes",
+        "scaling": 1.2
     }
+}
+const itemClasses = {
+    "misc": "#cccccc",
+    "consumable": "#ffcc22",
+    "gear": "#ff8888",
+    "tool": "#00bb66"
 }
 const itemData = {
     "straw": {
         "name": "Strand of Straw",
         "desc": "A strand of straw that came from a training dummy",
         "class": "misc",
-        "weight": 0.5
+        "weight": 0.5,
+        "obtainExecute": function() {
+            if (inventory['straw'] >= 25) {
+                discoverRecipe("strawPendant")
+            }
+        }
     },
     "exercisePill": {
         "name": "Exercise Pill",
@@ -428,6 +444,33 @@ const itemData = {
             "class": "weapon",
             "damage": [1.7, 2]
         }
+    },
+    "cauldron": {
+        "name": "Cauldron",
+        "desc": "Used for crafting potions",
+        "class": "tool",
+        "weight": 4000,
+        "obtainExecute": function() {
+            discoverRecipe("basicHealthPotion")
+        }
+    },
+    "basicHealthPotion": {
+        "name": "Basic Health Potion",
+        "desc": "Small and simple health potion. Increases your health by +30",
+        "class": "consumable",
+        "weight": 50,
+        "execute": function() {
+            changeHp(30)
+        },
+        "crafting": {
+            "type": "alchemy",
+            "complexity": 50,
+            "materials": {
+                "slime": 2,
+                "grass": 1,
+                "cauldron": 0
+            }
+        }
     }
 }
 const effectData = {
@@ -552,7 +595,8 @@ const questData = {
 const shopData = {
     "merchant": [
         {"name": "exercisePill", "chance": 100, "quantity": [1, 3], "price": [5, 7]},
-        {"name": "knife", "chance": 50, "quantity": [1, 1], "price": [19, 25]}
+        {"name": "knife", "chance": 50, "quantity": [1, 1], "price": [19, 25]},
+        {"name": "cauldron", "chance": 30, "quantity": [1, 1], "price": [60, 80]}
     ],
     "weaponShop": [
         {"name": "woodenClub", "chance": 100, "quantity": [1, 1], "price": [10, 15]},
@@ -574,18 +618,14 @@ const gyms = {
         "dex": 0.02
     }
 }
-const itemClasses = {
-    "misc": "#cccccc",
-    "consumable": "#ffcc22",
-    "gear": "#ff8888"
-}
 const titleData = {
     "athlete": {"name": "Athlete"},
     "fighter": {"name": "Fighter"},
     "disciple": {"name": "Disciple"},
     "seeker": {"name": "Seeker"},
     "crafter": {"name": "Crafter"},
-    "sleeper": {"name": "Sleeper"}
+    "sleeper": {"name": "Sleeper"},
+    "alchemist": {"name": "Alchemist"}
 }
 const arenaStatData = [
     {"health": [30, 40], "stats": [4,6], "reward": 10},
@@ -781,6 +821,10 @@ function insertLog(content, tooltip=null, id=null) {
     }
 
     if (logAutoScroll) {document.getElementById("log").scrollTop = document.getElementById("log").scrollHeight}
+
+    if (itemLogStackData['id'] != null && id == null) {
+        itemLogStackData = {"id": null, "item": null, "amount": null, "type": null}
+    }
     return logIncrement - 1
 }
 
@@ -1041,6 +1085,7 @@ function genItemLogText(item, amount) {
     return `${amount != null ? colorGen("#ccccff", `x${Math.abs(amount)} `) : ""}${colorGen(itemClasses[itemData[item]['class']], itemData[item]['name'])}`
 }
 
+let itemLogStackData = {"id": null, "item": null, "amount": null, "type": null}
 function changeInventory(item, amount, announceReduction=false, itemId=null, newItemData=null) {
     if (itemData[item]['stackable'] !== false) {
         if (inventory[item] == undefined) {
@@ -1094,11 +1139,25 @@ function changeInventory(item, amount, announceReduction=false, itemId=null, new
         }
     }
 
-    if (amount > 0) {
-        insertLog(`Obtained ${genItemLogText(item, amount)}`, [itemData[item]['name'], itemData[item]['desc']])
-    } else if (announceReduction == true) {
-        insertLog(`Used ${genItemLogText(item, amount)}`, [itemData[item]['name'], itemData[item]['desc']])
+    if (itemLogStackData['item'] != item) {
+        itemLogStackData = {"id": null, "item": null, "amount": null, "type": null}
     }
+    if (amount > 0) {
+        if (itemLogStackData['type'] != "obtain") {
+            itemLogStackData = {"id": null, "item": null, "amount": null, "type": null}
+        }
+        itemLogStackData['amount'] += amount
+        itemLogStackData['id'] = insertLog(`Obtained ${genItemLogText(item, itemLogStackData['amount'])}`, [itemData[item]['name'], itemData[item]['desc']], itemLogStackData['id'])
+        itemLogStackData['type'] = "obtain"
+    } else if (announceReduction == true) {
+        if (itemLogStackData['type'] != "use") {
+            itemLogStackData = {"id": null, "item": null, "amount": null, "type": null}
+        }
+        itemLogStackData['amount'] += amount
+        itemLogStackData['id'] = insertLog(`Used ${genItemLogText(item, itemLogStackData['amount'])}`, [itemData[item]['name'], itemData[item]['desc']], itemLogStackData['id'])
+        itemLogStackData['type'] = "use"
+    }
+    itemLogStackData['item'] = item
 
     if (itemData[item]['weight']) {
         const maxWeight = getMaxWeight()
@@ -1115,13 +1174,8 @@ function changeInventory(item, amount, announceReduction=false, itemId=null, new
         }
     }
 
-    // Obtaining checks
-    if (amount > 0) {
-        if (item == "straw") {
-            if (inventory['straw'] >= 25) {
-                discoverRecipe("strawPendant")
-            }
-        }
+    if (itemData[item]['obtainExecute']) {
+        itemData[item]['obtainExecute'](amount)
     }
 }
 
@@ -1132,12 +1186,28 @@ function discoverRecipe(recipe) {
     }
 }
 
+function generateStorageMenu() {
+    const storageTable = document.createElement("div")
+    storageTable.id = "storage-table"
+    document.getElementById("main").appendChild(storageTable)
+    for (const [item, amount] of Object.entries(storage)) {
+        // changeStorage(item, amount)
+        createItemDiv(item, "storage")
+        console.log(item)
+    }
+    for (const [id, data] of Object.entries(storageNonStackable)) {
+        const item = data['name']
+        console.log(item)
+        // changeStorage(item, 1, id, data)
+    }
+}
+
 function changeStorage(item, amount, itemId=null, newItemData=null, announce=true) {
     if (itemData[item]['stackable'] !== false) {
         if (storage[item] == undefined) {
             if (amount <= 0) {return false}
             storage[item] = amount
-            createItemDiv(item, "storage")
+            if (storageAccess) {createItemDiv(item, "storage")}
         } else {
             if (storage[item] + amount < 0) {return false}
             storage[item] += amount
@@ -1152,14 +1222,20 @@ function changeStorage(item, amount, itemId=null, newItemData=null, announce=tru
     } else {
         if (amount == 1) {
             storageNonStackable[itemId] = newItemData
-            createItemDiv(item, "storage", false, itemId)
+            if (storageAccess) {createItemDiv(item, "storage", false, itemId)}
         } else {
             delete storageNonStackable[itemId]
             document.getElementById(`storage-item-${item}_${itemId}`).remove()
         }
     }
     if (amount > 0 && announce == true) {
-        insertLog(`Deposited ${genItemLogText(item, amount)}`, [itemData[item]['name'], itemData[item]['desc']])
+        if (itemLogStackData['type'] != "deposit" || itemLogStackData['item'] != item) {
+            itemLogStackData = {"id": null, "item": null, "amount": null, "type": null}
+        }
+        itemLogStackData['amount'] += amount
+        itemLogStackData['id'] = insertLog(`Deposited ${genItemLogText(item, itemLogStackData['amount'])}`, [itemData[item]['name'], itemData[item]['desc']], itemLogStackData['id'])
+        itemLogStackData['type'] = "deposit"
+        itemLogStackData['item'] = item
     }
 }
 
@@ -1905,6 +1981,18 @@ function generateCraftingMenu() {
         const itemHolder = document.createElement("div")
         itemHolder.className = "crafting-item-holder"
 
+        const craftingType = document.createElement("span")
+        craftingType.className = "crafting-type"
+        if (itemData[item]['crafting']['type'] == undefined) {
+            craftingType.textContent = "C"
+            craftingType.style.color = "#ffaa55"
+            craftingType.setAttribute("data-tooltip-title", "Crafting")
+        } else if (itemData[item]['crafting']['type'] == "alchemy") {
+            craftingType.textContent = "A"
+            craftingType.style.color = "#aa55aa"
+            craftingType.setAttribute("data-tooltip-title", "Alchemy")
+        }
+
         const itemText = document.createElement("span")
         itemText.className = "item-text"
         itemText.textContent = itemData[item]['name']
@@ -1940,6 +2028,7 @@ function generateCraftingMenu() {
             i += 1
         }
 
+        itemHolder.appendChild(craftingType)
         itemHolder.appendChild(itemText)
         itemHolder.appendChild(itemComplexity)
         itemParent.appendChild(itemHolder)
@@ -1970,7 +2059,13 @@ function generateCraftingMenu() {
 
             let outputString = Object.entries(nonstackablesRequired).map(([item, amount]) => `- x${amount} ${itemData[item]['name']}`).join("\n")
             if (Object.keys(nonstackablesRequired).length == 0) {
-                let arrival = Math.ceil(time + itemData[item]['crafting']['complexity'] / getCraftingSpeed())
+                let craftingType = itemData[item]['crafting']['type']
+                let arrival
+                if (craftingType == undefined) {
+                    arrival = Math.ceil(time + itemData[item]['crafting']['complexity'] / getCraftingSpeed())
+                } else if (craftingType == "alchemy") {
+                    arrival = Math.ceil(time + itemData[item]['crafting']['complexity'] / getAlchemySpeed())
+                }
                 craftInfo['completed'] = 0
                 craftInfo['goal'] = itemData[item]['crafting']['complexity']
                 craftInfo['recipe'] = item
@@ -1999,6 +2094,10 @@ function changeMoney(amount) {
 
 function getCraftingSpeed() {
     return 1 + (0.05 * getSkillLevel("crafting"))
+}
+
+function getAlchemySpeed() {
+    return 1 + (0.05 * getSkillLevel("alchemy"))
 }
 
 function getExploreSpeed() {
@@ -2177,9 +2276,16 @@ function tick() {
     }
 
     if (craftInfo['recipe'] != null) {
-        craftInfo['completed'] += getCraftingSpeed()
-        changeSkill("crafting", 1)
-        changeTitleXp("crafter", 2)
+        let craftingType = itemData[craftInfo['recipe']]['crafting']['type']
+        if (craftingType == undefined) {
+            craftInfo['completed'] += getCraftingSpeed()
+            changeSkill("crafting", 1)
+            changeTitleXp("crafter", 2)
+        } else if (craftingType == "alchemy") {
+            craftInfo['completed'] += getAlchemySpeed()
+            changeSkill("alchemy", 1)
+            changeTitleXp("alchemist", 2)
+        }
         craftInfo['skillXp'] += 1
         if (craftInfo['completed'] >= craftInfo['goal']) {
             playTransition()
@@ -2403,6 +2509,12 @@ function updateTooltip() {
         } else {
             document.getElementById("tooltip-text").textContent = tooltipText
         }
+
+        if (tooltipText == undefined) {
+            document.getElementById("tooltip-hr").style.display = "none"
+        } else {
+            document.getElementById("tooltip-hr").style.display = ""
+        }
     }
 }
 
@@ -2466,6 +2578,17 @@ document.addEventListener("mousemove", function (e) {
     tooltip.style.top = `${top}px`
 })
 
+// Font size calc
+const span = document.createElement("span")
+span.textContent = "A"
+span.style.fontFamily = "monospace"
+span.style.fontSize = "16px"
+span.style.position = "absolute"
+span.style.visibility = "hidden"
+document.body.appendChild(span)
+const fontCharWidth = span.offsetWidth
+document.body.removeChild(span)
+
 function changeEquipment(itemId) {
     const item = inventoryNonStackable[itemId]['name']
     let itemClass = itemData[item]['combat']['class']
@@ -2475,13 +2598,17 @@ function changeEquipment(itemId) {
     }
 
     const equipmentElem = document.getElementById(`equipment-${itemClass}`)
+    const textElem = equipmentElem.querySelector(".equipment-item-text")
     if (equipment[itemClass] == null || itemId != equipment[itemClass][1]) {
         if (equipment[itemClass] != null && itemId != equipment[itemClass][1]) {
             document.getElementById(`item-${equipment[itemClass][0]}_${equipment[itemClass][1]}`).querySelector(".item-equipped").remove()
         }
         equipment[itemClass] = [item, itemId]
-        equipmentElem.querySelector(".equipment-item-text").textContent = itemData[item]['name']
-        equipmentElem.querySelector(".equipment-item-text").style.color = "#ffffff"
+        if (itemData[item]['name'].length * fontCharWidth > 140) {
+            textElem.style.fontSize = `${Math.floor(16 * (144 / (itemData[item]['name'].length * fontCharWidth)))}px`
+        }
+        textElem.textContent = itemData[item]['name']
+        textElem.style.color = "#ffffff"
         equipmentElem.querySelector(".bar-fill").style.width = `${inventoryNonStackable[itemId]['durability'] / inventoryNonStackable[itemId]['maxDurability'] * 100}%`
         const inventorySlot = document.getElementById(`item-${item}_${itemId}`)
         if (inventorySlot) {
@@ -2493,8 +2620,9 @@ function changeEquipment(itemId) {
         }
     } else {
         equipment[itemClass] = null
-        equipmentElem.querySelector(".equipment-item-text").textContent = equipmentElem.getAttribute("data-tooltip-title")
-        equipmentElem.querySelector(".equipment-item-text").style.color = ""
+        textElem.textContent = equipmentElem.getAttribute("data-tooltip-title")
+        textElem.style.fontSize = ""
+        textElem.style.color = ""
         equipmentElem.querySelector(".bar-fill").style.width = "0"
 
         document.getElementById(`item-${item}_${itemId}`).querySelector(".item-equipped").remove()
@@ -2508,7 +2636,13 @@ document.getElementById("inventory-table").addEventListener("click", function(e)
     if (discardMode == true) {
         if (item != null) {
             changeInventory(item, -1, false, itemId)
-            insertLog(`Discarded ${genItemLogText(item, 1)}`, [itemData[item]['name'], itemData[item]['desc']])
+            if (itemLogStackData['type'] != "discard" || itemLogStackData['item'] != item) {
+                itemLogStackData = {"id": null, "item": null, "amount": null, "type": null}
+            }
+            itemLogStackData['amount'] += 1
+            itemLogStackData['id'] = insertLog(`Discarded ${genItemLogText(item, itemLogStackData['amount'])}`, [itemData[item]['name'], itemData[item]['desc']], itemLogStackData['id'])
+            itemLogStackData['type'] = "discard"
+            itemLogStackData['item'] = item
         }
         return
     }
@@ -2617,7 +2751,13 @@ class scenes {
         const item = craftInfo['selected']
         craftInfo['selected'] = null
         craftingSelection = false
-        let arrival = Math.ceil(time + itemData[item]['crafting']['complexity'] / getCraftingSpeed())
+        let craftingType = itemData[item]['crafting']['type']
+        let arrival
+        if (craftingType == undefined) {
+            arrival = Math.ceil(time + itemData[item]['crafting']['complexity'] / getCraftingSpeed())
+        } else if (craftingType == "alchemy") {
+            arrival = Math.ceil(time + itemData[item]['crafting']['complexity'] / getAlchemySpeed())
+        }
         craftInfo['completed'] = 0
         craftInfo['goal'] = itemData[item]['crafting']['complexity']
         craftInfo['recipe'] = item
@@ -2674,8 +2814,8 @@ class scenes {
     }
 
     static storage() {
-        toggleStorageAccess(true)
-        return `You can access your storage from the sidebar. Click an item in your inventory to deposit it and click an item in your storage to withdraw it.\n\n{![leave.png]Leave|home|0|leaveStorage}`
+        // toggleStorageAccess(true)
+        return `You can store items here for future use.\n\n{![leave.png]Leave|home|0|leaveStorage}`
     }
 
     static table() {
@@ -3034,8 +3174,14 @@ class sceneFunctions {
 
     static cancelCrafting() {
         craftingSelection = false
-        changeSkill("crafting", -craftInfo['skillXp'])
-        changeTitleXp("crafter", -craftInfo['skillXp'] * 2)
+        let craftingType = itemData[craftInfo['recipe']]['crafting']['type']
+        if (craftingType == undefined) {
+            changeSkill("crafting", -craftInfo['skillXp'])
+            changeTitleXp("crafter", -craftInfo['skillXp'] * 2)
+        } else if (craftingType == "alchemy") {
+            changeSkill("alchemy", -craftInfo['skillXp'])
+            changeTitleXp("alchemist", -craftInfo['skillXp'] * 2)
+        }
         craftInfo['recipe'] = null
         craftInfo['completed'] = 0
         craftInfo['goal'] = 0
@@ -3091,6 +3237,11 @@ class sceneEndFunctions {
 
     static weaponShop() {
         generateShop("weaponShop")
+    }
+
+    static storage() {
+        generateStorageMenu()
+        toggleStorageAccess(true)
     }
 }
 
@@ -3369,7 +3520,7 @@ function loadSave(dict) {
             }
         }
 
-        if (dict['storageAccess'] == true) {toggleStorageAccess(true)}
+        // if (dict['storageAccess'] == true) {toggleStorageAccess(true)}
         
         // Combat
         combatData = dict['combatData'] ?? combatData
@@ -3447,6 +3598,7 @@ function loadSave(dict) {
         if (sceneEndFunctions[currentScene]) {sceneEndFunctions[currentScene]()}
 
         document.getElementById("log").replaceChildren()
+        itemLogStackData = {"id": null, "item": null, "amount": null, "type": null}
     } catch (error) {
         saveEnabled = false
         insertLog(colorGen("#ff0000", `Loading failed: ${error}`))

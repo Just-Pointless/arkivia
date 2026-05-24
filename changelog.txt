@@ -1,3 +1,11 @@
+v0.18
+- Made item movement logs stack
+- Scale down font size when overflowing in equipment bar
+- Add alchemy
+- Add crafting type to crafting menu
+- Made tooltips no longer show a horizontal bar when text doesn't exist
+- Move storage menu to text area
+
 v0.17
 - Add accessories
 - Implement discarding of items
