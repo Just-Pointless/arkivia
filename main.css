@@ -97,18 +97,23 @@ img {
     color: #ffffff;
 }
 
-#inventory-table, #quests-table, #completed-quests-table {
+#inventory-table, #quests-table, #completed-quests-table, #achievements-table {
     border: 1px solid #555555;
     border-left: 2px solid #555555;
     border-right: 2px solid #555555;
     font-size: 16px;
 }
 
-#quests-table, #completed-quests-table {
+#quests-table, #completed-quests-table, #achievements-table {
     display: grid;
     grid-template-columns: 1fr;
     gap: 10px;
     border: 0;
+    padding-bottom: 50px;
+}
+
+#achievements-table {
+    gap: 4px;
 }
 
 #completed-quests-header {
@@ -245,6 +250,34 @@ img {
     border-top: 1px solid #555555;
 }
 
+.achievement-parent {
+    width: calc(100% - 4px);
+    border: 2px solid #555555;
+}
+
+.achievement-title {
+    font-size: 16px;
+    margin-bottom: 5px;
+}
+
+.achievement-desc {
+    font-size: 12px;
+    color: #aaaaaa;
+}
+
+.achievement-progress {
+    font-size: 12px;
+    color: #aaaaaa;
+    text-align: right;
+    margin-right: 4px;
+}
+
+.achievement-bar {
+    background-color: #777777;
+    height: 4px;
+    width: 90%;
+}
+
 #menu-buttons-holder {
     margin-top: 10px;
     text-align: center;
@@ -269,11 +302,12 @@ img {
     margin-top: 10px;
 }
 
-#sidebar-menu-quests {
+#sidebar-menu-quests, #sidebar-menu-achievements {
     overflow-y: auto;
     overflow-x: hidden;
     scrollbar-color: #555555 #333333;
     scrollbar-width: thin;
+    padding-bottom: 100px;
 }
 
 #inventory-table {
@@ -397,6 +431,12 @@ img {
 
 #healthbar-fill, #enemy-healthbar-fill {
     background-color: #44bb44;
+}
+
+#healthbar-fill-damage, #enemy-healthbar-fill-damage {
+    background-color: #ff4444;
+    /* transition: width 0.3s linear;
+    transition-delay: 0.5s; */
 }
 
 #energy-bar-fill {

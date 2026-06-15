@@ -1,4 +1,4 @@
-const VERSION = "0.18"
+const VERSION = "0.19"
 
 document.getElementById("game-title").textContent = `Proto26 v${VERSION}`
 
@@ -55,7 +55,8 @@ var stats = {
     "playtime": 0,
     "gametime": 0,
     "kills": {},
-    "timeSlept": 0
+    "totalKills": 0,
+    "discoveredItems": [],
 }
 var shopStorage = {}
 var knownRecipes = ["strawBasket", "woodenSpear"]
@@ -722,14 +723,220 @@ function getRank() {
     return ranks.find(r => getTotalBattlestats() < r['max'])['rank']
 }
 
+let achievements = []
+
+function statAchievement(data) {
+    return {
+        "name": data['name'],
+        "desc": data['desc'],
+        "check": function() {return data['check']() >= data['goal']},
+        "goal": [data['goal'], data['check']]
+    }
+}
+
+const achievementData = {
+    "firstBlood": statAchievement({
+        "name": "First Blood",
+        "desc": "Defeat 1 enemy",
+        "check": function() {return stats['totalKills']},
+        "goal": 1
+    }),
+    "hunter": statAchievement({
+        "name": "Hunter",
+        "desc": "Defeat 10 enemies",
+        "check": function() {return stats['totalKills']},
+        "goal": 10
+    }),
+    "killer": statAchievement({
+        "name": "Killer",
+        "desc": "Defeat 100 enemies",
+        "check": function() {return stats['totalKills']},
+        "goal": 100
+    }),
+    "exterminator": statAchievement({
+        "name": "Exterminator",
+        "desc": "Defeat 1,000 enemies",
+        "check": function() {return stats['totalKills']},
+        "goal": 1000
+    }),
+    "collector": statAchievement({
+        "name": "Collector",
+        "desc": "Discover 10 items",
+        "check": function() {return stats['discoveredItems'].length},
+        "goal": 10
+    }),
+    "flatline": {
+        "name": "Flatline",
+        "desc": "Defeat an enemy in one hit",
+    },
+    "discovery": {
+        "name": "Discovery",
+        "desc": "Unlock a crafting recipe",
+    },
+    "survivor": {
+        "name": "Survivor",
+        "desc": "Win a battle with 5% or less health remaining (enemies with attacks only)",
+    },
+    "insomniac": statAchievement({
+        "name": "Insomniac",
+        "desc": "Stay awake for 48 hours",
+        "check": function() {return (stats['timeAwake'] ?? 0) / 60},
+        "goal": 48
+    }),
+    "money1": statAchievement({
+        "name": "Money",
+        "desc": "Earn $1",
+        "check": function() {return money},
+        "goal": 1
+    }),
+    "money10": statAchievement({
+        "name": "Pocket Change",
+        "desc": "Earn $10",
+        "check": function() {return money},
+        "goal": 10
+    }),
+    "money100": statAchievement({
+        "name": "Getting Somewhere",
+        "desc": "Earn $100",
+        "check": function() {return money},
+        "goal": 100
+    }),
+    "crafter": {
+        "name": "Crafter",
+        "desc": "Craft an item",
+    },
+    "skilled": statAchievement({
+        "name": "Skilled",
+        "desc": "Unlock 10 skills",
+        "check": function() {return Object.keys(skills).length},
+        "goal": 10
+    }),
+    "untouchable": {
+        "name": "Untouchable",
+        "desc": "Win a battle without taking damage (enemies with attacks only)",
+    },
+    "golemBreaker": {
+        "name": "Golem Breaker",
+        "desc": "Defeat a golem",
+    },
+    "wasteful": statAchievement({
+        "name": "Wasteful",
+        "desc": "Discard 10 items",
+        "check": function() {return stats['itemsDeleted'] ?? 0},
+        "goal": 10
+    })
+}
+
+function checkAchievement(achievement) {
+    if (!achievements.includes(achievement) && achievementData[achievement]['check'] && achievementData[achievement]['check']()) {
+        insertLog(`Achievement Unlocked: ${colorGen("#ffff00", `"${achievementData[achievement]['name']}"`)}`)
+        document.getElementById("achievements-button").style.display = ""
+        achievements.push(achievement)
+        const achievementParent = document.getElementById(`achievement-${achievement}`)
+        if (achievementParent) {
+            achievementParent.getElementsByClassName("achievement-title")[0].style.color = "#ffff00"
+            if (achievementData[achievement]['goal']) {
+                const achievementProgress = achievementParent.getElementsByClassName("achievement-progress")[0]
+                const achievementBar = achievementParent.getElementsByClassName("achievement-bar")[0]
+                if (achievementProgress) {achievementProgress.remove()}
+                if (achievementBar) {achievementBar.remove()}
+            }
+        }
+        return true
+    } else if (achievementData[achievement]['goal']) {
+        const achievementParent = document.getElementById(`achievement-${achievement}`)
+        if (achievementParent) {
+            const achievementProgress = achievementParent.getElementsByClassName("achievement-progress")[0]
+            const achievementBar = achievementParent.getElementsByClassName("achievement-bar")[0]
+            if (achievementProgress) {achievementProgress.textContent = `${formatNumber(achievementData[achievement]['goal'][1]())} / ${formatNumber(achievementData[achievement]['goal'][0])}`}
+            if (achievementBar) {achievementBar.style.width = `${Math.min(achievementData[achievement]['goal'][1]() / achievementData[achievement]['goal'][0] * 100, 100)}%`}
+        }
+    }
+    return false
+}
+
+function checkAchievements(achievements) {
+    for (const achievement of achievements) {
+        checkAchievement(achievement)
+    }
+}
+
+function giveAchievement(achievement) {
+    if (!achievements.includes(achievement)) {
+        insertLog(`Achievement Unlocked: ${colorGen("#ffff00", `"${achievementData[achievement]['name']}"`)}`)
+        document.getElementById("achievements-button").style.display = ""
+        achievements.push(achievement)
+        const achievementParent = document.getElementById(`achievement-${achievement}`)
+        if (achievementParent) {
+            achievementParent.getElementsByClassName("achievement-title")[0].style.color = "#ffff00"
+            if (achievementData[achievement]['goal']) {
+                const achievementProgress = achievementParent.getElementsByClassName("achievement-progress")[0]
+                const achievementBar = achievementParent.getElementsByClassName("achievement-bar")[0]
+                if (achievementProgress) {achievementProgress.remove()}
+                if (achievementBar) {achievementBar.remove()}
+            }
+        }
+    }
+}
+
+let achievementTableLoaded = false
+document.getElementById("achievements-button").addEventListener("click", function() { // For performance reasons, this only generates it on click
+    if (achievementTableLoaded == false) {
+        achievementTableLoaded = true
+        for (const [id, data] of Object.entries(achievementData)) {
+            const achievementParent = document.createElement("div")
+            achievementParent.className = "achievement-parent"
+            achievementParent.id = `achievement-${id}`
+
+            const achievementTitle = document.createElement("div")
+            achievementTitle.className = "achievement-title"
+            achievementTitle.textContent = achievementData[id]['name']
+
+            const achievementDesc = document.createElement("div")
+            achievementDesc.className = "achievement-desc"
+            achievementDesc.textContent = achievementData[id]['desc']
+
+            achievementParent.appendChild(achievementTitle)
+            achievementParent.appendChild(achievementDesc)
+            if (!achievements.includes(id)) {
+                if (achievementData[id]['goal']) {
+                    if (checkAchievement(id)) {
+                        achievementTitle.style.color = "#ffff00"
+                    } else {
+                        const achievementProgress = document.createElement("div")
+                        achievementProgress.className = "achievement-progress"
+                        achievementProgress.textContent = `${formatNumber(achievementData[id]['goal'][1]())} / ${formatNumber(achievementData[id]['goal'][0])}`
+
+                        const achievementBar = document.createElement("div")
+                        achievementBar.className = "achievement-bar"
+                        achievementBar.style.width = `${Math.min(achievementData[id]['goal'][1]() / achievementData[id]['goal'][0] * 100, 100)}%`
+                        achievementParent.appendChild(achievementProgress)
+                        achievementParent.appendChild(achievementBar)
+                    }
+                }
+            } else {
+                achievementTitle.style.color = "#ffff00"
+            }
+
+            document.getElementById("achievements-table").appendChild(achievementParent)
+        }
+    }
+})
+
 function updateLevelText(currentXp=xp) {
     document.getElementById("level").textContent = `Level ${xpToLevel(currentXp)} ${getRank()}`
 }
 
-function updateBar(bar) {
+function updateBar(bar, change=null) {
     if (bar == "health") {
         document.getElementById("healthbar-text").textContent = `HP: ${health}/${calcMaxHp()}`
         document.getElementById("healthbar-fill").style.width = `${health / calcMaxHp() * 100}%`
+        if (change != null) {
+            document.getElementById("healthbar-fill-damage").style.left = `${health / calcMaxHp() * 100}%`
+            document.getElementById("healthbar-fill-damage").style.width = `${-change / calcMaxHp() * 100}%`
+        } else {
+            document.getElementById("healthbar-fill-damage").style.width = "0"
+        }
     } else if (bar == "energy") {
         document.getElementById("energy-bar-text").textContent = `Energy: ${Math.round(energy)}/100`
         document.getElementById("energy-bar-fill").style.width = `${energy / 100 * 100}%`
@@ -740,6 +947,12 @@ function updateBar(bar) {
     } else if (bar == "enemyHealth") {
         document.getElementById("enemy-healthbar-text").textContent = `HP: ${combatData['enemyHealth']}/${combatData['enemyMaxHealth']}`
         document.getElementById("enemy-healthbar-fill").style.width = `${combatData['enemyHealth'] / combatData['enemyMaxHealth'] * 100}%`
+        if (change != null) {
+            document.getElementById("enemy-healthbar-fill-damage").style.left = `${combatData['enemyHealth'] / combatData['enemyMaxHealth'] * 100}%`
+            document.getElementById("enemy-healthbar-fill-damage").style.width = `${-change / combatData['enemyMaxHealth'] * 100}%`
+        } else {
+            document.getElementById("enemy-healthbar-fill-damage").style.width = "0"
+        }
     }
 }
 
@@ -756,9 +969,14 @@ function updateBattlestats(statName=null) {
 
 function updateEnemyBattlestats(statName=null) {
     for (const [stat, value] of Object.entries(combatData['enemyStats'])) {
-        if ((statName == null || stat == statName) && value != 0) {
+        if (statName == null || stat == statName) {
             const effectiveStat = value * calcEnemyStatDebuff(stat)
-            const debuffPercentage = effectiveStat / value * 100 - 100
+            let debuffPercentage
+            if (effectiveStat != 0) {
+                debuffPercentage = effectiveStat / value * 100 - 100
+            } else {
+                debuffPercentage = 0
+            }
             document.getElementById(`enemy-stat-${stat}`).textContent = `${stat.charAt(0).toUpperCase()}${stat.slice(1)}: ${formatNumber(value)}${Math.round(debuffPercentage) != 0 ? ` (${debuffPercentage.toFixed(0)}%)` : ""}`
         }
     }
@@ -895,10 +1113,11 @@ function endFight() {
         "dex": 0
     }
     combatData['onDeath'] = undefined
-    for (const [effect, value] of Object.entries(combatData['enemyEffects'])) {
+    for (const [effect, value] of Object.entries(combatData['enemyEffects'] || {})) {
         changeEnemyEffect(effect, null)
     }
     combatData['enemyEffects'] = []
+    combatData['tags'] = undefined
 
     document.getElementById("enemy-name").textContent = ""
     updateBar("enemyHealth")
@@ -929,6 +1148,8 @@ function killEnemy() {
 
     changeQuestProgress("kills", combatData['enemy'], 1)
     stats['kills'][combatData['enemy']] = (stats['kills'][combatData['enemy']] ?? 0) + 1
+    stats['totalKills'] += 1
+    checkAchievements(["firstBlood", "hunter", "killer", "exterminator"])
 
     if (combatData['onDeath']) {
         onDeathFunctions.get(combatData['onDeath'])()
@@ -985,6 +1206,8 @@ function changeSkill(skill, skillXp) {
         skillbarParent.appendChild(skillbarFill)
         skillbarParent.appendChild(skillbarText)
         document.getElementById("skill-table").appendChild(skillbarParent)
+        
+        checkAchievement("skilled")
     } else {
         skills[skill] += skillXp
         const skillbarFill = document.getElementById(`skill-${skill}`).getElementsByClassName("skillbar-fill")[0]
@@ -1015,7 +1238,7 @@ function formatNumber(num, round=false) {
     const value = num / 1000 ** exp
     const decimals = value < 1 ? 3 : value < 10 ? 2 : value < 100 ? 1 : 0
     if (round == false || num >= 1000) {
-        return sign + value.toFixed(decimals).replace(/\.0+$/, "") + units[exp]
+        return sign + Number(value.toFixed(decimals).replace(/\.0+$/, "")) + units[exp]
     } else {
         return value.toFixed()
     }
@@ -1177,11 +1400,22 @@ function changeInventory(item, amount, announceReduction=false, itemId=null, new
     if (itemData[item]['obtainExecute']) {
         itemData[item]['obtainExecute'](amount)
     }
+
+    if (stats['discoveredItems'] == undefined) {
+        stats['discoveredItems'] = []
+    }
+
+    if (!stats['discoveredItems'].includes(item)) {
+        stats['discoveredItems'].push(item)
+        insertLog(`${colorGen("#ffff00", "New Item:")} ${genItemLogText(item)}`, [itemData[item]['name'], itemData[item]['desc']])
+        checkAchievement("collector")
+    }
 }
 
 function discoverRecipe(recipe) {
     if (!knownRecipes.includes(recipe)) {
         knownRecipes.push(recipe)
+        giveAchievement("discovery")
         insertLog(`New Recipe: ${genItemLogText(recipe)}`, [itemData[recipe]['name'], itemData[recipe]['desc']])
     }
 }
@@ -1193,11 +1427,9 @@ function generateStorageMenu() {
     for (const [item, amount] of Object.entries(storage)) {
         // changeStorage(item, amount)
         createItemDiv(item, "storage")
-        console.log(item)
     }
     for (const [id, data] of Object.entries(storageNonStackable)) {
         const item = data['name']
-        console.log(item)
         // changeStorage(item, 1, id, data)
     }
 }
@@ -1475,8 +1707,10 @@ function changeTime(amount) {
     stats['gametime'] += amount
     if (currentScene != "sleep") {
         noSleepTime = Math.min(noSleepTime + amount, 1440)
+        stats['timeAwake'] = (stats['timeAwake'] ?? 0) + amount
+        checkAchievement("insomniac")
     } else {
-        stats['timeSlept'] += amount
+        stats['totalTimeSlept'] = (stats['timeSlept'] ?? 0) + amount
     }
 
     if (Math.floor((time - amount) / 1440) < Math.floor(time / 1440)) {
@@ -1655,6 +1889,7 @@ function calcEnemyStatDebuff(stat=null) {
 }
 
 function changeHp(amount) {
+    let oldHealth = health
     health = Math.min(Math.max(health + amount, 0), calcMaxHp())
 
     if (health <= 0) {
@@ -1677,7 +1912,7 @@ function changeHp(amount) {
         changeEnergy(-energy / 2)
     }
 
-    updateBar("health")
+    updateBar("health", health - oldHealth)
 }
 
 function getQuestGoals(questName) {
@@ -2090,6 +2325,7 @@ function changeMoney(amount) {
         insertLog(`Obtained ${colorGen("#cccc55", `$${formatNumber(amount)}`)}`)
     }
     document.getElementById("inventory-money").textContent = `$${formatNumber(money)}`
+    checkAchievements(["money1", "money10", "money100"])
 }
 
 function getCraftingSpeed() {
@@ -2134,6 +2370,7 @@ const onDeathFunctions = new Map([
         playTransition()
         sceneManager("dojoYard")
         checks['golemMax'] = Math.max(checks['golemMax'] || 0, 1)
+        giveAchievement("golemBreaker")
     }],
     ["woodGolem", function() {
         playTransition()
@@ -2256,6 +2493,7 @@ const explorePools = {
 function tick() {
     stats['playtime'] += 1
     changeTime(currentScene != "sleep" ? 1 : 10)
+    updateBar("health")
 
     if (travelInfo['destination'] != null) {
         // if ((travelInfo['arrival'][0] <= time && travelInfo['arrival'][1] <= day) || travelInfo['arrival'][1] < day) {
@@ -2305,6 +2543,7 @@ function tick() {
             craftInfo['goal'] = 0
             craftInfo['using'] = []
             craftInfo['skillXp'] = 0
+            giveAchievement("crafter")
             sceneManager("table")
         }
     }
@@ -2334,7 +2573,7 @@ function tick() {
 
     // Combat
     if (combatData['enemy'] != null) {
-        for (const [effect, value] of Object.entries(combatData['enemyEffects'])) {
+        for (const [effect, value] of Object.entries(combatData['enemyEffects'] || {})) {
             if (Number.isInteger(value)) {
                 if (value <= time) {
                     changeEnemyEffect(effect, null)
@@ -2364,6 +2603,7 @@ function tick() {
             const turnHitChance = calcHitChance(effectiveStats['spd'], enemyStats['dex'])
             
             const turnActualDmg = Math.round(turnDmg * (1 - turnDmgMitigation))
+            const oldEnemyHealth = combatData['enemyHealth']
             if (turnHitChance / 100 > Math.random()) {
                 insertLog(`You -> ${colorGen("#ff3333", turnActualDmg)}`)
                 combatData['enemyHealth'] -= turnActualDmg
@@ -2399,6 +2639,17 @@ function tick() {
             }
 
             if (combatData['enemyHealth'] <= 0) {
+                if (oldEnemyHealth >= combatData['enemyMaxHealth']) {
+                    giveAchievement("flatline")
+                }
+                if (enemyStats['str'] > 0 && enemyStats['spd'] > 0) {
+                    if (combatData.tags?.['hits'] == undefined) {
+                        giveAchievement("untouchable")
+                    }
+                    if (health / calcMaxHp() <= 0.05) {
+                        giveAchievement("survivor")
+                    }
+                }
                 killEnemy()
             } else {
                 if (enemyStats['str'] > 0 && enemyStats['spd'] > 0 && combatData['enemyEffects']['stun'] == undefined) {
@@ -2411,13 +2662,14 @@ function tick() {
 
                     if (turnHitChance / 100 > Math.random()) {
                         insertLog(`${enemyData[combatData['enemy']]['name']} -> ${colorGen("#ff3333", turnActualDmg)}`)
-                        changeHp(-turnActualDmg)
+                        changeHp(-turnActualDmg);
+                        const tags = (combatData['tags'] ??= {})
+                        tags['hits'] = (tags['hits'] ?? 0) + 1
                     } else {
                         insertLog(colorGen("#aaaaaa", `${enemyData[combatData['enemy']]['name']} missed`))
                     }
                 }
-
-                updateBar("enemyHealth")
+                updateBar("enemyHealth", combatData['enemyHealth'] - oldEnemyHealth)
             }
         } else {
             killEnemy()
@@ -2433,7 +2685,6 @@ function tick() {
     const handler = sceneTicks.get(currentScene)
     if (handler) {handler()}
 
-    // updateBar("health") No longer needed as changehp function updates it
     // updateBar("energy") No longer needed as changeenergy function updates it
     // updateBar("xp") No longer needed as changexp function updates it
     updateBattlestats()
@@ -2442,23 +2693,23 @@ function tick() {
     updateTooltip()
 }
 
-const interval = 1000
+let tickDelay = 1000
 let lastTickTime = performance.now()
 function tickLoop() {
     const now = performance.now()
     const elapsed = now - lastTickTime
 
-    if (elapsed >= interval) {
-        let missedTicks = Math.min(Math.floor(elapsed / interval), 1000)
+    if (elapsed >= tickDelay) {
+        let missedTicks = Math.min(Math.floor(elapsed / tickDelay), 1000)
 
         for (let i = 0; i < missedTicks; i++) {
             tick()
         }
 
-        lastTickTime = now - (elapsed % interval)
+        lastTickTime = now - (elapsed % tickDelay)
     }
 
-    setTimeout(tickLoop, Math.max(0, interval - (performance.now() - lastTickTime)))
+    setTimeout(tickLoop, Math.max(0, tickDelay - (performance.now() - lastTickTime)))
 }
 tickLoop()
 // setInterval(tick, 1000)
@@ -2643,6 +2894,9 @@ document.getElementById("inventory-table").addEventListener("click", function(e)
             itemLogStackData['id'] = insertLog(`Discarded ${genItemLogText(item, itemLogStackData['amount'])}`, [itemData[item]['name'], itemData[item]['desc']], itemLogStackData['id'])
             itemLogStackData['type'] = "discard"
             itemLogStackData['item'] = item
+
+            stats['itemsDeleted'] = (stats['itemsDeleted'] ?? 0) + 1
+            checkAchievement("wasteful")
         }
         return
     }
@@ -2810,6 +3064,7 @@ class scenes {
     }
 
     static sleep() {
+        stats['timeAwake'] = 0
         return `You are currently sleeping. Time passes faster...\n\n{![leave.png]Get up|home}`
     }
 
@@ -3343,7 +3598,7 @@ function makeSave() { // Optimisation at all costs
     }
 
     let base = {
-        money, time, health, xp, playerTitle, battleStats, skills, energy, noSleepTime, effects, titleScores, // Stats
+        money, time, health, xp, playerTitle, battleStats, skills, energy, noSleepTime, effects, titleScores, achievements, // Stats
         inventory, inventoryNonStackable, inventoryNonStackableIncrement, storage, storageNonStackable, storageAccess, shopStorage, // Inventory
         combatData, equipment, team, arenaData, // Combat
         oldScene, currentScene, sceneText, // Scenes
@@ -3367,6 +3622,7 @@ function makeSave() { // Optimisation at all costs
         base['titleScores'][title] = Math.round(value * 1000) / 1000
     }
     removeEmpty("titleScores", base)
+    removeEmpty("achievements", base)
 
     // Combat
     if (base['combatData']['enemy'] == null) {base['combatData'] = undefined}
@@ -3459,6 +3715,9 @@ function loadSave(dict) {
         if (versionCompare(dict['version'], "0.17")) {
             combatData['enemyEffects'] ??= []
         }
+        if (versionCompare(dict['version'], "0.19")) {
+            dict['stats']['totalKills'] = Object.values(dict['stats']['kills']).reduce((acc, val) => acc + val, 0)
+        }
 
         // Stats
         time = dict['time'] ?? time
@@ -3494,6 +3753,8 @@ function loadSave(dict) {
                 changeEffect(effect, time, true)
             }
         }
+        achievements = dict['achievements'] ?? achievements
+        if (dict['achievements']) {document.getElementById("achievements-button").style.display = ""}
         
         // Inventory
         inventoryNonStackableIncrement = dict['inventoryNonStackableIncrement'] ?? inventoryNonStackableIncrement
@@ -3739,6 +4000,13 @@ sceneJumpInput.addEventListener("keydown", function(e) {
         sceneManager(sceneJumpInput.value)
         sceneJumpInput.value = ""
         suggestionsContainer.replaceChildren()
+    }
+})
+
+document.getElementById("debug-settings-tickDelay").addEventListener("keydown", function(e) {
+    if (e.key == "Enter") {
+        tickDelay = this.value
+        this.blur()
     }
 })
 

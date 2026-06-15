@@ -1,3 +1,10 @@
+v0.19
+- Fix number formatting
+- Fix enemy stat display
+- Add damage effect to healthbars
+- Remove accidental debug statement
+- Fix errors when enemyeffects is undefined
+
 v0.18
 - Made item movement logs stack
 - Scale down font size when overflowing in equipment bar

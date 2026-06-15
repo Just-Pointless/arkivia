@@ -25,6 +25,7 @@
             <div id="level" data-tooltip-title="Level & Rank" data-tooltip-text="Shows your current level and rank. Rank is based off your battle stats">Level 0 G-</div>
             <div class="bar-parent" id="healthbar">
                 <div class="bar-fill" id="healthbar-fill"></div>
+                <div class="bar-fill" id="healthbar-fill-damage" style="width: 0;"></div>
                 <div class="bar-text" id="healthbar-text" data-tooltip-title="Health" data-tooltip-text="Reaching 0 health points causes you to lose a battle">HP: 10/10</div>
             </div>
             <div class="bar-parent" id="energy-bar">
@@ -53,6 +54,7 @@
             <button class="menu-button" id="skills-button">Skills</button>
             <button class="menu-button" id="storage-button" style="display: none;">Storage</button>
             <button class="menu-button" id="quests-button" style="display: none;">Quests</button>
+            <button class="menu-button" id="achievements-button" style="display: none;">Achievements</button>
             <button class="menu-button" id="debug-button" style="display: none;">Debug</button>
         </div>
 
@@ -117,6 +119,11 @@
             <div id="completed-quests-table" style="display: none;"></div>
         </div>
 
+        <div class="sidebar-menu" id="sidebar-menu-achievements" style="display: none;">
+            <div class="sidebar-menu-title">Achievements</div>
+            <div id="achievements-table"></div>
+        </div>
+
         <div class="sidebar-menu" id="sidebar-menu-debug" style="display: none; text-align: center;">
             <div class="sidebar-menu-title">Debug</div>
             <div class="debug-header">Stats</div>
@@ -136,6 +143,10 @@
             <p></p>
             <div class="debug-header">Weather</div>
             <div id="weather-chances" style="white-space: pre;"></div>
+            <p></p>
+            <div class="debug-header">Settings</div>
+            Tick Delay
+            <input id="debug-settings-tickDelay" value="1000">
         </div>
     </div>
     <div id="bottombar">
@@ -152,6 +163,7 @@
             <div id="enemy-name">Unknown Enemy</div>
             <div class="bar-parent" id="enemy-healthbar">
                 <div class="bar-fill" id="enemy-healthbar-fill"></div>
+                <div class="bar-fill" id="enemy-healthbar-fill-damage" style="width: 0;"></div>
                 <div class="bar-text" id="enemy-healthbar-text" data-tooltip-title="Health" data-tooltip-text="Reducing this to 0 causes you to win the battle">HP: 10/10</div>
             </div>
         </div>
