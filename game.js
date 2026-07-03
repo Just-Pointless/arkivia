@@ -1,6 +1,6 @@
-const VERSION = "0.19"
+const VERSION = "0.20"
 
-document.getElementById("game-title").textContent = `Proto26 v${VERSION}`
+document.getElementById("game-title").textContent = `Arkivia v${VERSION}`
 
 var money = 0
 var time = 420
@@ -8,6 +8,7 @@ var oldScene = ""
 var currentScene = ""
 var sceneText = ""
 var prependText = ""
+var region = "Unknown"
 var health = 10
 var xp = 0
 var playerTitle = "Unknown"
@@ -15,7 +16,6 @@ var travelInfo = {
     "destination": null,
     "distance": 0,
     "completed": 0,
-    // "arrival": [0, 0]
 }
 var battleStats = {
     "str": 1,
@@ -34,7 +34,7 @@ var combatData = {
         "dex": 0
     },
     "enemyProperties": [],
-    "enemyEffects": []
+    "enemyEffects": {}
 }
 var checks = {}
 var logAutoScroll = true
@@ -50,6 +50,7 @@ var energy = 100
 var noSleepTime = 0
 var effects = {}
 var quests = {}
+var questProgression = {}
 var completedQuests = []
 var stats = {
     "playtime": 0,
@@ -216,6 +217,52 @@ const enemyData = {
             }}
         ],
         "xp": [15, 20]
+    },
+    "lizard": {
+        "name": "Lizard",
+        "health": [100, 150],
+        "str": [4, 5],
+        "def": [2, 3],
+        "spd": [4, 5],
+        "dex": [6, 8],
+        "xp": [10, 13]
+    },
+    "spider": {
+        "name": "Spider",
+        "health": [80, 110],
+        "str": [6, 7],
+        "def": [2, 3],
+        "spd": [7, 8],
+        "dex": [3, 5],
+        "xp": [10, 13]
+    },
+    "venomousSpider": {
+        "name": "Venomous Spider",
+        "health": [200, 250],
+        "str": [6, 7],
+        "def": [2, 3],
+        "spd": [7, 8],
+        "dex": [3, 5],
+        "xp": [15, 20],
+        "attackExecute": function(dmg) {
+            if (dmg > 0) {
+                if (Math.random() <= 0.3) {
+                    changeEffect("poison", 4, false, {"change": 0.8, "dmg": dmg / 2})
+                    insertLog(colorGen(effectData['poison']['color'], `You are poisoned`))
+                }
+            }
+        }
+    },
+    "death": {
+        "name": "Death",
+        "health": 1e6,
+        "str": 1e12,
+        "def": 1e12,
+        "spd": 1e12,
+        "dex": 1e12,
+        "attackExecute": function() {
+            insertLog(colorGen("#bb7777", "You aren't supposed to get this far..."))
+        }
     }
 }
 const skillData = {
@@ -426,7 +473,7 @@ const itemData = {
             "execute": function(dmg) {
                 if (dmg > 0) {
                     if (Math.random() <= 0.1) {
-                        changeEnemyEffect("stun", 2)
+                        changeEnemyEffect("stun", time + 2, true)
                         insertLog(colorGen(effectData['stun']['color'], `${enemyData[combatData['enemy']]['name']} is stunned`))
                     }
                 }
@@ -472,12 +519,18 @@ const itemData = {
                 "cauldron": 0
             }
         }
-    }
+    },
+    "wood": {
+        "name": "Wood",
+        "desc": "Can be used as fuel for a fire",
+        "class": "misc",
+        "weight": 100
+    },
 }
 const effectData = {
     "sleepDeprived": {
         "name": "Sleep Deprived",
-        "desc": "Due to a lack of sleep, your energy loss per minute has increased",
+        "desc": "Energy loss per minute increased",
         "color": "#006666"
     },
     "exercisePill": {
@@ -494,6 +547,11 @@ const effectData = {
         "name": "Stunned",
         "desc": "Unable to attack",
         "color": "#995555"
+    },
+    "poison": {
+        "name": "Poison",
+        "desc": "Takes damage over time",
+        "color": "#990099"
     }
 }
 const questData = {
@@ -591,6 +649,17 @@ const questData = {
                 }
             }
         }
+    },
+    "els1": {
+        "name": "Els's Quest",
+        "desc": "Els has requested you to obtain 3 pieces of wood",
+        "repeatable": false,
+        "manualComplete": true,
+        "goals": {
+            "items": {
+                "wood": {"amount": 3}
+            }
+        }
     }
 }
 const shopData = {
@@ -634,7 +703,8 @@ const arenaStatData = [
     {"health": [120, 150], "stats": [20,30], "reward": 30},
     {"health": [200, 300], "stats": [50,100], "reward": 50},
     {"health": [400, 600], "stats": [200,300], "reward": 70},
-    {"health": [800, 1_000], "stats": [600,800], "reward": 100}
+    {"health": [800, 1_000], "stats": [600,800], "reward": 100},
+    {"enemyType": "death", "reward": 0} // Until future content is made
 ]
 const statTypes = ["str", "def", "spd", "dex"]
 
@@ -647,7 +717,7 @@ function getDayName(date=null) {
 }
 
 function minutesToDate(time) {
-    const baseDate = new Date(1900, 0, 1)
+    const baseDate = new Date(1600, 0, 1)
     baseDate.setMinutes(baseDate.getMinutes() + time)
     return baseDate
 }
@@ -929,7 +999,7 @@ function updateLevelText(currentXp=xp) {
 
 function updateBar(bar, change=null) {
     if (bar == "health") {
-        document.getElementById("healthbar-text").textContent = `HP: ${health}/${calcMaxHp()}`
+        document.getElementById("healthbar-text").textContent = `HP: ${formatNumber(health, true)}/${formatNumber(calcMaxHp(), true)}`
         document.getElementById("healthbar-fill").style.width = `${health / calcMaxHp() * 100}%`
         if (change != null) {
             document.getElementById("healthbar-fill-damage").style.left = `${health / calcMaxHp() * 100}%`
@@ -941,11 +1011,11 @@ function updateBar(bar, change=null) {
         document.getElementById("energy-bar-text").textContent = `Energy: ${Math.round(energy)}/100`
         document.getElementById("energy-bar-fill").style.width = `${energy / 100 * 100}%`
     } else if (bar == "xp") {
-        document.getElementById("xp-bar-text").textContent = `XP: ${Math.round(xpIntoLevel(xp))}/${Math.round(xpForLevel(xpToLevel(xp)))}`
+        document.getElementById("xp-bar-text").textContent = `XP: ${formatNumber(xpIntoLevel(xp), true)}/${formatNumber(xpForLevel(xpToLevel(xp)), true)}`
         document.getElementById("xp-bar-fill").style.width = `${xpIntoLevel(xp) / xpForLevel(xpToLevel(xp)) * 100}%`
         updateLevelText(xp)
     } else if (bar == "enemyHealth") {
-        document.getElementById("enemy-healthbar-text").textContent = `HP: ${combatData['enemyHealth']}/${combatData['enemyMaxHealth']}`
+        document.getElementById("enemy-healthbar-text").textContent = `HP: ${formatNumber(combatData['enemyHealth'], true)}/${formatNumber(combatData['enemyMaxHealth'], true)}`
         document.getElementById("enemy-healthbar-fill").style.width = `${combatData['enemyHealth'] / combatData['enemyMaxHealth'] * 100}%`
         if (change != null) {
             document.getElementById("enemy-healthbar-fill-damage").style.left = `${combatData['enemyHealth'] / combatData['enemyMaxHealth'] * 100}%`
@@ -956,12 +1026,16 @@ function updateBar(bar, change=null) {
     }
 }
 
+function capitaliseFirst(string) {
+    return string.charAt(0).toUpperCase() + string.slice(1)
+}
+
 function updateBattlestats(statName=null) {
     for (const [stat, value] of Object.entries(battleStats)) {
         if (statName == null || stat == statName) {
             const effectiveStat = value * calcStatModifier(stat)
-            const debuffPercentage = effectiveStat / value * 100 - 100
-            document.getElementById(`stat-${stat}`).textContent = `${stat.charAt(0).toUpperCase()}${stat.slice(1)}: ${formatNumber(value)}${Math.round(debuffPercentage) != 0 ? ` (${debuffPercentage.toFixed(0)}%)` : ""}`
+            const modifierPercentage = effectiveStat / value * 100 - 100
+            document.getElementById(`stat-${stat}`).textContent = `${capitaliseFirst(stat)}: ${formatNumber(value)}${Math.round(modifierPercentage) != 0 ? ` (${(modifierPercentage > 0 ? "+" : "") + modifierPercentage.toFixed(0)}%)` : ""}`
         }
     }
     document.getElementById(`stat-total`).textContent = `Ttl: ${formatNumber(getTotalBattlestats())}`
@@ -977,7 +1051,7 @@ function updateEnemyBattlestats(statName=null) {
             } else {
                 debuffPercentage = 0
             }
-            document.getElementById(`enemy-stat-${stat}`).textContent = `${stat.charAt(0).toUpperCase()}${stat.slice(1)}: ${formatNumber(value)}${Math.round(debuffPercentage) != 0 ? ` (${debuffPercentage.toFixed(0)}%)` : ""}`
+            document.getElementById(`enemy-stat-${stat}`).textContent = `${capitaliseFirst(stat)}: ${formatNumber(value)}${Math.round(debuffPercentage) != 0 ? ` (${debuffPercentage.toFixed(0)}%)` : ""}`
         }
     }
 }
@@ -1116,7 +1190,7 @@ function endFight() {
     for (const [effect, value] of Object.entries(combatData['enemyEffects'] || {})) {
         changeEnemyEffect(effect, null)
     }
-    combatData['enemyEffects'] = []
+    combatData['enemyEffects'] = {}
     combatData['tags'] = undefined
 
     document.getElementById("enemy-name").textContent = ""
@@ -1222,7 +1296,7 @@ function changeSkill(skill, skillXp) {
     }
 }
 
-function formatNumber(num, round=false) {
+function formatNumber(num, round=false, lowPrecision=false) {
     if (!isFinite(num)) return "inf"
 
     const sign = num < 0 ? "-" : ""
@@ -1236,11 +1310,16 @@ function formatNumber(num, round=false) {
     }
 
     const value = num / 1000 ** exp
-    const decimals = value < 1 ? 3 : value < 10 ? 2 : value < 100 ? 1 : 0
+    let decimals
+    if (lowPrecision == false) {
+        decimals = value < 1 ? 3 : value < 10 ? 2 : value < 100 ? 1 : 0
+    } else {
+        decimals = value < 1 ? 2 : value < 10 ? 1 : 0
+    }
     if (round == false || num >= 1000) {
         return sign + Number(value.toFixed(decimals).replace(/\.0+$/, "")) + units[exp]
     } else {
-        return value.toFixed()
+        return sign + value.toFixed()
     }
 }
 
@@ -1326,6 +1405,7 @@ function changeInventory(item, amount, announceReduction=false, itemId=null, new
                 document.getElementById(`item-${item}`).getElementsByClassName("item-quantity")[0].textContent = `x${inventory[item]}`
             }
         }
+        changeQuestProgress("items", item, inventory[item])
     } else {
         if (amount == 1) {
             if (newItemData == null) {
@@ -1718,7 +1798,7 @@ function changeTime(amount) {
     }
     if (sceneProperties[currentScene]) {
         if (sceneProperties[currentScene].includes("outdoors") && weather == "rain") {
-            if (!effects['wet'] || effects['wet'] - time < 60) {
+            if (!effects['wet'] || effects['wet']['duration'] - time < 60) {
                 changeEffect("wet", 5)
             }
         }
@@ -1744,92 +1824,109 @@ function getTimeName() {
     else {return "???"}
 }
 
-function changeEffect(effect, duration=0, absolute=false) {
-    if (effects[effect] == undefined && duration != null && duration >= 0) {
-        if (duration == 0) {
-            effects[effect] = true
+function createEffectElement(effect, type="player") {
+    const div = document.createElement("div")
+
+    div.className = "effect-icon"
+    div.id = type == "enemy" ? `enemy-effect-${effect}` : `effect-${effect}`
+    div.style.backgroundColor = effectData[effect]['color']
+    div.setAttribute("data-tooltip-title", effectData[effect]['name'])
+
+    return div
+}
+
+function updateEffectTooltip(elem, effect, type="player") {
+    let data = type == "enemy" ? combatData['enemyEffects'][effect] : effects[effect]
+    let text = effectData[effect]['desc']
+
+    if (!data['indefinite']) {
+        text += `<hr>Ends: ${colorGen("#ccccff", formatTime(data['duration'], true))}`
+    }
+
+    elem.setAttribute("data-tooltip-text", text)
+}
+
+function createEffect(duration, absolute, properties) {
+    const effect = {
+        "indefinite": duration == 0,
+        "duration": duration == 0 ? null : (absolute ? duration : duration + time)
+    }
+
+    if (properties != null) {
+        effect['properties'] = properties
+    }
+
+    return effect
+}
+
+function changeEffect(effect, duration=0, absolute=false, properties=null) {
+    const effectElem = document.getElementById(`effect-${effect}`)
+    const existing = effects[effect]
+
+    if (duration == null) {
+        if (!existing) {return}
+
+        delete effects[effect]
+        effectElem?.remove()
+        return
+    } else if (!existing) {
+        effects[effect] = createEffect(duration, absolute, properties)
+
+        const div = createEffectElement(effect)
+        updateEffectTooltip(div, effect)
+        document.getElementById("effects-bar").appendChild(div)
+        return
+    } else if (duration == 0) {
+        existing['indefinite'] = true
+        existing['duration'] = null
+
+        if (properties) {existing['properties'] = properties}
+    } else {
+        existing['indefinite'] = false
+
+        if (absolute) {
+            existing['duration'] = duration
         } else {
-            if (absolute == false) {
-                effects[effect] = duration + time
-            } else {
-                effects[effect] = duration
-            }
-        }
-        const div = document.createElement("div")
-        div.className = "effect-icon"
-        div.id = `effect-${effect}`
-        div.style.backgroundColor = effectData[effect]['color']
-        div.setAttribute("data-tooltip-title", effectData[effect]['name'])
-        if (duration == 0 || duration == true) {
-            div.setAttribute("data-tooltip-text", effectData[effect]['desc'])
-        } else {
-            div.setAttribute("data-tooltip-text", `${effectData[effect]['desc']}<hr>Ends: ${colorGen("#ccccff", formatTime(effects[effect], true))}`)
+            existing['duration'] += duration
         }
 
-        document.getElementById("effects-bar").appendChild(div)
-    } else {
-        if (duration == null) {
-            if (effects[effect] != undefined) {
-                delete effects[effect]
-                if (document.getElementById(`effect-${effect}`)) {
-                    document.getElementById(`effect-${effect}`).remove()
-                }
-            }
-        } else {
-            if (duration == 0) {
-                effects[effect] = true
-            } else if (absolute == false) {
-                effects[effect] += duration
-            } else {
-                effects[effect] = duration
-            }
-            document.getElementById(`effect-${effect}`).setAttribute("data-tooltip-text", `${effectData[effect]['desc']}<hr>Ends: ${colorGen("#ccccff", formatTime(effects[effect], true))}`)
-        }
+        if (properties) {existing['properties'] = properties}
     }
+
+    updateEffectTooltip(document.getElementById(`effect-${effect}`), effect)
 }
 
 function changeEnemyEffect(effect, duration=0, absolute=false) {
-    if (combatData['enemyEffects'][effect] == undefined && duration != null && duration >= 0) {
-        if (duration == 0) {
-            combatData['enemyEffects'][effect] = true
-        } else {
-            if (absolute == false) {
-                combatData['enemyEffects'][effect] = duration + time
-            } else {
-                combatData['enemyEffects'][effect] = duration
-            }
-        }
-        const div = document.createElement("div")
-        div.className = "effect-icon"
-        div.id = `enemy-effect-${effect}`
-        div.style.backgroundColor = effectData[effect]['color']
-        div.setAttribute("data-tooltip-title", effectData[effect]['name'])
-        if (duration == 0 || duration == true) {
-            div.setAttribute("data-tooltip-text", effectData[effect]['desc'])
-        } else {
-            div.setAttribute("data-tooltip-text", `${effectData[effect]['desc']}<hr>Ends: ${colorGen("#ccccff", formatTime(combatData['enemyEffects'][effect], true))}`)
-        }
+    const effectElem = document.getElementById(`enemy-effect-${effect}`)
+    const existing = combatData['enemyEffects'][effect]
 
+    if (duration == null) {
+        if (!existing) {return}
+
+        delete combatData['enemyEffects'][effect]
+        effectElem?.remove()
+        return
+    } else if (!existing) {
+        combatData['enemyEffects'][effect] = createEffect(duration, absolute)
+
+        const div = createEffectElement(effect, "enemy")
+        updateEffectTooltip(div, effect, "enemy")
         document.getElementById("enemy-effects-bar").appendChild(div)
+        return
+    } else if (duration == 0) {
+        existing['indefinite'] = true
+        existing['duration'] = null
     } else {
-        if (duration == null) {
-            if (combatData['enemyEffects'][effect] != undefined) {
-                delete combatData['enemyEffects'][effect]
-                if (document.getElementById(`enemy-effect-${effect}`)) {
-                    document.getElementById(`enemy-effect-${effect}`).remove()
-                }
-            }
+        existing['indefinite'] = false
+
+        if (absolute) {
+            existing['duration'] = duration
         } else {
-            if (duration == 0) {
-                combatData['enemyEffects'][effect] = true
-            } else if (absolute == false) {
-                combatData['enemyEffects'][effect] += duration
-            } else {
-                combatData['enemyEffects'][effect] = duration
-            }
-            document.getElementById(`enemy-effect-${effect}`).setAttribute("data-tooltip-text", `${effectData[effect]['desc']}<hr>Ends: ${colorGen("#ccccff", formatTime(combatData['enemyEffects'][effect], true))}`)
+            existing['duration'] += duration
         }
     }
+
+    updateEffectTooltip(document.getElementById(`enemy-effect-${effect}`), effect, "enemy")
 }
 
 function calcEnergyDebuff() {
@@ -1910,6 +2007,14 @@ function changeHp(amount) {
         health = 1
         insertLog(colorGen("#bb4444", `${(-energy / 2).toFixed(0)} Energy`))
         changeEnergy(-energy / 2)
+
+        for (const [effect, value] of Object.entries(effects)) {
+            changeEffect(effect, null)
+        }
+
+        if (document.visibilityState == "hidden") {
+            document.title = "Arkivia | DEAD"
+        }
     }
 
     updateBar("health", health - oldHealth)
@@ -1944,12 +2049,23 @@ function getQuestGoals(questName) {
                     "amount": data['amount'],
                     "completion": statValue
                 }
+            } else if (data['lifetime'] == undefined) {
+                let statValue
+                if (type == "items") {
+                    statValue = inventory[stat] || 0
+                }
+
+                output[type][stat] = {
+                    "amount": data['amount'],
+                    "completion": statValue
+                }
             }
         }
     }
     return output
 }
 
+const metQuests = {}
 function checkCompletion(questName) {
     if (quests[questName] == undefined) {
         return false
@@ -1958,20 +2074,30 @@ function checkCompletion(questName) {
     for (const [type, values] of Object.entries(goals)) {
         for (const [stat, data] of Object.entries(values)) {
             if (data['amount'] > data['completion']) {
+                if (metQuests[questName] == true) {
+                    delete metQuests[questName]
+                    document.getElementById(`quest-${questName}`).getElementsByClassName("quest-title")[0].style.color = ""
+                }
                 return false
             }
         }
     }
 
-    delete quests[questName]
-    insertLog(`Completed Quest: ${colorGen("#ffff00", `"${questData[questName]['name']}"`)}`)
-    if (questData[questName]['repeatable'] == false) {
-        completedQuests.push(questName)
+    if (!questData[questName]['manualComplete']) {
+        delete quests[questName]
+        insertLog(`Completed Quest: ${colorGen("#ffff00", `"${questData[questName]['name']}"`)}`)
+        if (questData[questName]['repeatable'] == false) {
+            completedQuests.push(questName)
+        }
+        document.getElementById("completed-quests-table").appendChild(document.getElementById(`quest-${questName}`))
+        document.getElementById(`quest-${questName}`).getElementsByClassName("quest-title")[0].style.color = "#ffff00"
+        document.getElementById("completed-quests-table").style.display = ""
+        document.getElementById("completed-quests-header").style.display = ""
+    } else if (metQuests[questName] == undefined) {
+        insertLog(`Quest Met: ${colorGen("#bbff00", `"${questData[questName]['name']}"`)}`)
+        document.getElementById(`quest-${questName}`).getElementsByClassName("quest-title")[0].style.color = "#bbff00"
+        metQuests[questName] = true
     }
-    document.getElementById("completed-quests-table").appendChild(document.getElementById(`quest-${questName}`))
-    document.getElementById(`quest-${questName}`).getElementsByClassName("quest-title")[0].style.color = "#ffff00"
-    document.getElementById("completed-quests-table").style.display = ""
-    document.getElementById("completed-quests-header").style.display = ""
 }
 
 function giveQuest(questName, complete=false) {
@@ -2050,15 +2176,22 @@ function giveQuest(questName, complete=false) {
         questParent.appendChild(questDesc)
         questParent.appendChild(questGoals)
         document.getElementById("quests-table").appendChild(questParent)
+    }
 
-        if (complete == false) {
-            checkCompletion(questName)
-        } else {
-            document.getElementById("completed-quests-table").appendChild(document.getElementById(`quest-${questName}`))
-            document.getElementById(`quest-${questName}`).getElementsByClassName("quest-title")[0].style.color = "#ffff00"
-            document.getElementById("completed-quests-table").style.display = ""
-            document.getElementById("completed-quests-header").style.display = ""
+    if (complete == false) {
+        checkCompletion(questName)
+    } else {
+        delete quests[questName]
+        if (!completedQuests.includes(questName)) {
+            insertLog(`Completed Quest: ${colorGen("#ffff00", `"${questData[questName]['name']}"`)}`)
+            if (questData[questName]['repeatable'] == false) {
+                completedQuests.push(questName)
+            }
         }
+        document.getElementById("completed-quests-table").appendChild(document.getElementById(`quest-${questName}`))
+        document.getElementById(`quest-${questName}`).getElementsByClassName("quest-title")[0].style.color = "#ffff00"
+        document.getElementById("completed-quests-table").style.display = ""
+        document.getElementById("completed-quests-header").style.display = ""
     }
 }
 
@@ -2069,15 +2202,25 @@ function changeQuestProgress(type, stat, value) {
             let newValue
             if (questStatData['lifetime'] == true) {
                 newValue = value
-            } else {
+            } else if (questStatData['lifetime'] == false) {
                 newValue = quests[quest]['goals'][type][stat]['completion'] + value
                 quests[quest]['goals'][type][stat]['completion'] = newValue
+            } else {
+                if (type == "items") {
+                    newValue = value
+                }
             }
             const goalElem = document.getElementById(`quest-${quest}-${stat}`)
             goalElem.textContent = `${formatNumber(newValue)}/${questStatData['amount']}`
             if (newValue >= questStatData['amount']) {
                 goalElem.style.color = "#00ff00"
                 checkCompletion(quest)
+            } else if (newValue < questStatData['amount']) {
+                goalElem.style.color = "#ff0000"
+                if (metQuests[quest]) {
+                    delete metQuests[quest]
+                    document.getElementById(`quest-${quest}`).getElementsByClassName("quest-title")[0].style.color = ""
+                }
             }
         }
     }
@@ -2099,7 +2242,10 @@ function trainingAreaHandler(stat, gymName="none") {
         trainingSession['gain'] = 0
     }
     trainingSession['gain'] += gain
-    trainingSession['logId'] = insertLog(`+${formatNumber(trainingSession['gain'])} (+${formatNumber(gain)}/m) ${stat.replace("str", "Strength").replace("def", "Defense").replace("spd", "Speed").replace("dex", "Dexterity")}`, null, trainingSession['logId'])
+    trainingSession['logId'] = insertLog(`+${formatNumber(trainingSession['gain'])} (+${formatNumber(gain)}/s) ${stat.replace("str", "Strength").replace("def", "Defense").replace("spd", "Speed").replace("dex", "Dexterity")}`, null, trainingSession['logId'])
+    if (document.visibilityState == "hidden") {
+        document.title = `Arkivia | ${capitaliseFirst(stat)} +${formatNumber(trainingSession['gain'], false, true)} (+${formatNumber(gain, false, true)}/s)`
+    }
 }
 
 function changeBattlestat(stat, amount, absolute=false) {
@@ -2389,6 +2535,15 @@ const onDeathFunctions = new Map([
     ["arenaWinMatch", function() {
         playTransition()
         sceneManager("theArenaWinMatch")
+    }],
+    ["forestLayer1Death", function() {
+        checks['forestLayer1EnemiesRemaining'] = (checks['forestLayer1EnemiesRemaining'] ?? 100) - 1
+        processText(`You are clearing the enemies blocking the pathway in the forest.\n${checks['forestLayer1EnemiesRemaining'] || 100} enemies remain.\n\n{![stop.png]Stop|forestLayer1|0|endFight}`)
+        if (checks['forestLayer1EnemiesRemaining'] === 0) {
+            prependText = "You have finished clearing the enemies.\n\n"
+            playTransition()
+            sceneManager("forestLayer1")
+        }
     }]
 ])
 
@@ -2451,16 +2606,30 @@ const sceneTicks = new Map([
     }],
     ["grassPlains", function() {
         if (travelInfo['destination'] == null && (checks['spawnDelay'] == null || checks['spawnDelay'] <= time)) {
-            const rng = randomRange(1, 1000)
-            if (rng <= 750) {
+            const rng = Math.random()
+            if (rng < 0.75) {
                 generateEnemy("greenSlime")
-            } else if (rng <= 900) {
+            } else if (rng < 0.9) {
                 generateEnemy("blueSlime")
             } else {
                 generateEnemy("purpleSlime")
             }
         }
     }],
+    ["forestLayer1Clear", function() {
+        if (combatData['enemy'] == null) {
+            const rng = Math.random()
+            if (rng < 0.45) {
+                generateEnemy("lizard")
+            } else if (rng < 0.9) {
+                generateEnemy("spider")
+            } else {
+                generateEnemy("venomousSpider")
+            }
+
+            combatData['onDeath'] = "forestLayer1Death"
+        }
+    }]
 ])
 
 const effectFunctions = new Map([
@@ -2471,6 +2640,11 @@ const effectFunctions = new Map([
     }],
     ["wet", function(time) {
         changeEnergy(-0.02 * time)
+    }],
+    ["poison", function(time) {
+        effects['poison']['properties']['dmg'] *= effects['poison']['properties']['change']
+        insertLog(`You -> ${colorGen("#ff3333", formatNumber(effects['poison']['properties']['dmg'], true))} ${colorGen(effectData['poison']['color'], "(Poison)")}`)
+        changeHp(-effects['poison']['properties']['dmg'])
     }]
 ])
 
@@ -2485,6 +2659,7 @@ const explorePools = {
     "forestLayer1Explore": {
         "difficulty": [15, 20],
         "loot": {
+            "wood": 2,
             "woodenStick": 1
         }
     }
@@ -2564,8 +2739,8 @@ function tick() {
     }
 
     for (const [effect, value] of Object.entries(effects)) {
-        if (Number.isInteger(value)) {
-            if (value <= time) {
+        if (Number.isInteger(value['duration'])) {
+            if (value['duration'] <= time) {
                 changeEffect(effect, null)
             }
         }
@@ -2574,8 +2749,8 @@ function tick() {
     // Combat
     if (combatData['enemy'] != null) {
         for (const [effect, value] of Object.entries(combatData['enemyEffects'] || {})) {
-            if (Number.isInteger(value)) {
-                if (value <= time) {
+            if (Number.isInteger(value['duration'])) {
+                if (value['duration'] <= time) {
                     changeEnemyEffect(effect, null)
                 }
             }
@@ -2662,9 +2837,13 @@ function tick() {
 
                     if (turnHitChance / 100 > Math.random()) {
                         insertLog(`${enemyData[combatData['enemy']]['name']} -> ${colorGen("#ff3333", turnActualDmg)}`)
-                        changeHp(-turnActualDmg);
                         const tags = (combatData['tags'] ??= {})
                         tags['hits'] = (tags['hits'] ?? 0) + 1
+
+                        if (enemyData[combatData['enemy']]['attackExecute']) {
+                            enemyData[combatData['enemy']]['attackExecute'](turnActualDmg)
+                        }
+                        changeHp(-turnActualDmg)
                     } else {
                         insertLog(colorGen("#aaaaaa", `${enemyData[combatData['enemy']]['name']} missed`))
                     }
@@ -2673,6 +2852,10 @@ function tick() {
             }
         } else {
             killEnemy()
+        }
+
+        if (document.visibilityState == "hidden" && combatData['enemy'] != null) {
+            document.title = `Arkivia | L${xpToLevel(xp)} (${Math.floor(xpIntoLevel(xp) / xpForLevel(xpToLevel(xp)) * 100)}%) ${formatNumber(health, true)}hp`
         }
     }
 
@@ -2692,6 +2875,10 @@ function tick() {
 
     updateTooltip()
 }
+
+window.addEventListener("focus", function() {
+    document.title = "Arkivia"
+})
 
 let tickDelay = 1000
 let lastTickTime = performance.now()
@@ -2973,15 +3160,62 @@ function genTrainingAreaText(target) {
     return `{![dumbbells.png]Train Strength|${target}_str}\n{![shield.png]Train Defense|${target}_def}\n{![treadmill.png]Train Speed|${target}_spd}\n{![dexterity.png]Train Dexterity|${target}_dex}`
 }
 
+function genQuestGiver(checkId, actionTexts, questList) {
+    let allComplete = true
+    for (let i = 0; i < questList.length; i++) {
+        if (!completedQuests.includes(questList[i]['quest'])) {
+            allComplete = false
+        }
+        if ((completedQuests.includes(questList[i]['quest']) || metQuests[questList[i]['quest']]) && (questProgression[checkId] == undefined || questProgression[checkId] < i)) {
+            const quest = questList[i]
+
+            if (metQuests[questList[i]['quest']]) {
+                delete metQuests[questList[i]['quest']]
+                giveQuest(questList[i]['quest'], true)
+            }
+
+            questProgression[checkId] = i
+            if (questList[i + 1] != undefined) {
+                giveQuest(questList[i + 1]['quest'])
+            }
+            if (questList[i]['rewards']) {
+                for (const [item, amount] of Object.entries(questList[i]['rewards'])) {
+                    changeInventory(item, amount)
+                }
+            }
+            if (questList[i]['money']) {
+                changeMoney(questList[i]['money'])
+            }
+
+
+            if (questList[i]['consumed']) {
+                for (const [item, amount] of Object.entries(questList[i]['consumed'])) {
+                    changeInventory(item, -amount)
+                }
+            }
+
+            return quest['message']
+        }
+    }
+    if (allComplete == false) {
+        return actionTexts['none']
+    } else {
+        return actionTexts['allComplete'] || actionTexts['none']
+    }
+}
+
 const sceneProperties = {
     "housingArea": ["outdoors"],
     "townCenter": ["outdoors"],
     "noticeBoard": ["outdoors"],
     "trainingGrounds": ["outdoors"],
+    "trainingGroundsInstructor": ["outdoors"],
+    "trainingGroundsInstructorAskStats": ["outdoors"],
     "trainingGrounds_str": ["outdoors"],
     "trainingGrounds_def": ["outdoors"],
     "trainingGrounds_spd": ["outdoors"],
     "trainingGrounds_dex": ["outdoors"],
+    "trainingGroundsTeamIntro1": ["outdoors"],
     "dojoYard": ["outdoors"],
     "dojoGolems": ["outdoors"],
     "dojo_golemFight": ["outdoors"],
@@ -2993,7 +3227,36 @@ const sceneProperties = {
     "townGatesNorthExterior": ["outdoors"],
     "grassPlains": ["outdoors"],
     "forestLayer1": ["outdoors"],
-    "forestLayer1Explore": ["outdoors"]
+    "forestLayer1Explore": ["outdoors"],
+    "forestLayer1Clear": ["outdoors"],
+    "forestLayer2": ["outdoors"],
+}
+
+const sceneRegions = {
+    "intro1": "starterTown",
+    "home": "starterTown",
+    "sleep": "starterTown",
+    "storage": "starterTown",
+    "table": "starterTown",
+    "housingArea": "starterTown",
+    "townCenter": "starterTown",
+    "noticeBoard": "starterTown",
+    "trainingGrounds": "starterTown",
+    "dojo": "starterTown",
+    "dojoYard": "starterTown",
+    "hospital": "starterTown",
+    "alley": "starterTown",
+    "merchant": "starterTown",
+    "townNorth": "starterTown",
+    "park": "starterTown",
+    "weaponShop": "starterTown",
+    "theArenaEntrance": "starterTown",
+    "townGatesNorth": "starterTown",
+    "townGatesNorthExterior": "wilderness",
+    "grassPlains": "wilderness",
+    "forestLayer1": "forest",
+    "huntersGuild": "forest",
+    "forestLayer2": "forest",
 }
 
 class scenes {
@@ -3110,10 +3373,10 @@ class scenes {
     }
 
     static trainingGroundsInstructor() {
-        return `{![chat.png]Ask about stats|trainingGroundsInstructorAskStats}\n\n{![leave.png]Return|trainingGrounds}`
+        return `{![chat.png]Ask about stats|trainingGroundsInstructor_askStats}\n\n{![leave.png]Return|trainingGrounds}`
     }
 
-    static trainingGroundsInstructorAskStats() {
+    static trainingGroundsInstructor_askStats() {
         return `"Everyone has four main stats. Strength increases the damage you deal, Defense reduces the damage you take, Speed increases your chances of hitting and Dexterity increases the chance of dodging attacks."\n\n{![leave.png]Return|trainingGroundsInstructor}`
     }
 
@@ -3134,21 +3397,21 @@ class scenes {
     }
 
     static trainingGroundsTeamIntro1() {
-        return `"Awesome! I'll tell you everything you need to know. Follow me."\n\n{Continue|trainingGroundsTeamIntro2}`
+        return `"Awesome! I'll tell you everything you need to know. Follow me."\n\n{Next|trainingGroundsTeamIntro2}`
     }
 
     static trainingGroundsTeamIntro2() {
-        return `You follow the young man in to a large tent on the field.\n\n"This is the tent with all our special training equipment and staff. Training here would be 2x as effective than the public equipment."\n\n{Continue|trainingGroundsTeamIntro3}`
+        return `You follow the young man in to a large tent on the field.\n\n"This is the tent with all our special training equipment and staff. Training here would be double as effective than the public equipment."\n\n{Next|trainingGroundsTeamIntro3}`
     }
 
     static trainingGroundsTeamIntro3() {
-        return `"We give rewards like exercise pills depending on how well you place in the weekly arena matches. On top of that, you also gain money from the competition organisers themselves."\n\n{Continue|trainingGroundsTeamIntro4}`
+        return `"We give rewards like exercise pills depending on how well you place in the weekly arena matches. On top of that, you also gain money from the competition organisers themselves."\n\n{Next|trainingGroundsTeamIntro4}`
     }
 
     static trainingGroundsTeamIntro4() {
         changeInventory("exercisePill", 4)
         team = "nextLevel"
-        return `"Arena matches always run on a Sunday, I suggest beginning your training now. Here are 4 exercise pills as a thanks for joining us."\n\n{Continue|trainingGrounds_nextLevel}`
+        return `"Arena matches always run on a Sunday, I suggest beginning your training now. Here are 4 exercise pills as a thanks for joining us."\n\n{Next|trainingGrounds_nextLevel}`
     }
 
     static trainingGrounds_nextLevel() {
@@ -3207,52 +3470,47 @@ class scenes {
     }
 
     static dojoInstructor() {
-        return `"Need something?"\n\n{![tick.png]Quest Completion|dojoInstructorQuest}\n\n{![leave.png]Return|dojo}`
+        return `"Need something?"\n\n{![poster.png]Quest Completion|dojoInstructorQuest}\n\n{![leave.png]Return|dojo}`
     }
 
     static dojoInstructorQuest() {
-        const dojoQuests = [
+        return genQuestGiver("dojo", {"none": `"You don't seem to have completed any new quests."\n\n{![leave.png]Return|dojoInstructor}`}, [
             {
                 "quest": "dojoIntro1",
-                "pillReward": 1,
-                "message": "Good job, you've proven that you're able to do some basic fighting. Unlike real enemies, these dummies don't fight back or move. For your next task: get all your battle stats to 1.5. Then I can give you some real enemies to fight."
+                "rewards": {
+                    "exercisePill": 1
+                },
+                "message": `"Good job, you've proven that you're able to do some basic fighting. Unlike real enemies, these dummies don't fight back or move. For your next task: get all your battle stats to 1.5. Then I can give you some real enemies to fight."\n\n{![leave.png]Return|dojo}`
             },
             {
                 "quest": "dojoIntro2",
-                "pillReward": 1,
-                "message": "You now have some decent stats, still below the average human in this world but you should now be able do my next quest without issue. Your goal is to defeat 10 mice in the alleys. Visit the hospital if your health drops too low. If you struggle to defeat the mice, I suggest training a bit more."
+                "rewards": {
+                    "exercisePill": 1
+                },
+                "message": `"You now have some decent stats, still below the average human in this world but you should now be able do my next quest without issue. Your goal is to defeat 10 mice in the alleys. Visit the hospital if your health drops too low. If you struggle to defeat the mice, I suggest training a bit more."\n\n{![leave.png]Return|dojo}`
             },
             {
                 "quest": "dojoIntro3",
-                "pillReward": 2,
-                "message": "Good job, you've proven that you're able to fight real enemies now. Although only small ones, it's still progress. Your next task is to defeat the wooden golem located in the dojo yard. This is significantly harder than the mice but you'll only have to defeat one of them."
+                "rewards": {
+                    "exercisePill": 2
+                },
+                "message": `"Good job, you've proven that you're able to fight real enemies now. Although only small ones, it's still progress. Your next task is to defeat the wooden golem located in the dojo yard. This is significantly harder than the mice but you'll only have to defeat one of them."\n\n{![leave.png]Return|dojo}`
             },
             {
                 "quest": "dojoIntro4",
-                "pillReward": 5,
-                "message": "Congratulations on beating the golem, there are more available for you to fight if you wish. For my final quest: I want you to reach 10 in every stat. Upon completion you'll gain permission to explore outside of the town. This may take you a while and I wouldn't expect you to complete it quickly. You can continue exploring other areas inside the town while working your way towards completion."
+                "rewards": {
+                    "exercisePill": 5
+                },
+                "message": `"Congratulations on beating the golem, there are more available for you to fight if you wish. For my final quest: I want you to reach 10 in every stat. Upon completion you'll gain permission to explore outside of the town. This may take you a while and I wouldn't expect you to complete it quickly. You can continue exploring other areas inside the town while working your way towards completion."\n\n{![leave.png]Return|dojo}`
             },
             {
                 "quest": "dojoIntro5",
-                "pillReward": 7,
-                "message": "This is the end of my questline for now, you are free to explore outside the town but be careful as there are stronger enemies around."
+                "rewards": {
+                    "exercisePill": 7
+                },
+                "message": `"This is the end of my questline for now, you are free to explore outside the town but be careful as there are stronger enemies around."\n\n{![leave.png]Return|dojo}`
             }
-        ]
-        for (let i = 0; i < dojoQuests.length; i++) {
-            if (completedQuests.includes(dojoQuests[i]['quest']) && (checks['dojoQuestIndex'] == undefined || checks['dojoQuestIndex'] < i)) {
-                const quest = dojoQuests[i]
-
-                checks['dojoQuestIndex'] = i
-                if (dojoQuests[i + 1] != undefined) {
-                    giveQuest(dojoQuests[i + 1]['quest'])
-                }
-                changeInventory("exercisePill", quest['pillReward'])
-
-                return `"${quest['message']}"\n\n{![leave.png]Return|dojo}`
-            }
-        }
-
-        return `"You don't seem to have completed any new quests."\n\n{![leave.png]Return|dojo}`
+        ])
     }
 
     static dojoYard() {
@@ -3353,13 +3611,17 @@ class scenes {
 
     static theArenaFight() {
         const newStats = arenaStatData[arenaData['round'] - 1]
-        generateEnemy("human", {
-            "health": newStats['health'],
-            "str": newStats['stats'],
-            "def": newStats['stats'],
-            "spd": newStats['stats'],
-            "dex": newStats['stats']
-        })
+        if (newStats['enemyType'] == undefined) {
+            generateEnemy("human", {
+                "health": newStats['health'],
+                "str": newStats['stats'],
+                "def": newStats['stats'],
+                "spd": newStats['stats'],
+                "dex": newStats['stats']
+            })
+        } else {
+            generateEnemy(newStats['enemyType'])
+        }
         combatData['onDeath'] = "arenaWinMatch"
         return `You are currently fighting your opponent in The Arena.`
     }
@@ -3405,11 +3667,89 @@ class scenes {
     }
 
     static forestLayer1() {
-        return `You are standing near the entrance of the forest. The nearby trees provide some shade.\n\n{![search.png]Explore|forestLayer1Explore}\n\n{![park.png]Grass Plains|grassPlains|1000}`
+        let r =  `You are standing near the entrance of the forest. The nearby trees provide some shade.`
+        if (checks['forestLayer1EnemiesRemaining'] !== 0) {r += ` Some monsters are blocking the path to the deeper layers.`}
+        r += `\n\n{![search.png]Explore|forestLayer1Explore}`
+        if (checks['forestLayer1EnemiesRemaining'] !== 0) {r += `\n{![sword.png]Clear path|forestLayer1Clear}`}
+        r += `\n\n{![sword_shield.png]Hunters' Guild|huntersGuild}\n\n`
+        if (checks['forestLayer1EnemiesRemaining'] === 0) {r += `{![arrow_right.png]Walk towards the center|forestLayer2|300(Forest Center)}\n`}
+        r += `{![park.png]Grass Plains|grassPlains|1000}`
+        return r
     }
 
     static forestLayer1Explore() {
         return `You are searching for items in the forest.\n\n{![stop.png]Stop|forestLayer1}`
+    }
+
+    static forestLayer1Clear() {
+        return `You are clearing the enemies blocking the pathway in the forest.\n${checks['forestLayer1EnemiesRemaining'] || 100} enemies remain.\n\n{![stop.png]Stop|forestLayer1|0|endFight}`
+    }
+
+    static huntersGuild() {
+        if (!checks['huntersGuildIntro']) {
+            return `You slowly walk into the hunters' guild, the occupants appear to be having a discussion about enemies in the forest. You stand around for a minute until one of them invites you to listen.\n\nYou couldn't understand anything.\n\n{Next|huntersGuildIntro}`
+        } else {
+            return `You are in the hunters' guild. A group of hunters gather around the fireplace.\n\n{![fire.png]Fireplace|huntersGuildFireplace}\n\n{![leave.png]Leave|forestLayer1}`
+        }
+    }
+
+    static huntersGuildIntro() {
+        checks['huntersGuildIntro'] = true
+        return `"Sorry if that was a bit rushed or hard to understand. We had to prepare an emergency plan due to an imminent threat in the forest."\n\nHe reaches out and firmly shakes your hand.\n\n"My name's Els and I'm the leader of this guild. We focus on discovering, researching and hunting the various creatures in this forest."\n\n"If you would like to know more, come talk to me near the fireplace."\n\n{Next|huntersGuild}`
+    }
+
+    static huntersGuildFireplace() {
+        return `You are sitting on a chair near the fireplace in the hunters' guild.\n\n{![chat.png]Talk to Els|huntersGuildEls}\n\n{![leave.png]Leave|huntersGuild}`
+    }
+
+    static huntersGuildEls() {
+        let r = `"Hello, what do you need today?"`
+        if (checks['huntersGuildAskQuest']) {
+            if (questProgression['els'] == undefined && !quests['els1']) {
+                r += `\n\n{![poster.png]Receive Quest|huntersGuildElsQuest}`
+            } else {
+                r += `\n\n{![poster.png]Quest Completion|huntersGuildElsQuest}`
+            }
+        }
+        r += `\n\n{![chat.png]Ask about the guild|huntersGuildEls_askGuild}\n{![chat.png]Ask about creatures|huntersGuildEls_askForest}`
+        if (!checks['huntersGuildAskQuest']) {r += `\n{![chat.png]Ask about quests|huntersGuildEls_askQuests}`}
+        r += `\n\n{![leave.png]Leave|huntersGuildFireplace}`
+        return r
+    }
+
+    static huntersGuildElsQuest() {
+        if (questProgression['els'] == undefined && !quests['els1']) {
+            giveQuest("els1")
+            return `"We've been needing some firewood lately in order to keep the fireplace burning. Obtain 3 pieces of wood by searching in the forest. Come back when you're done."\n\n{![leave.png]Return|huntersGuildEls}`
+        } else {
+            return genQuestGiver("els", {"none": `"You haven't fulfilled my quest."\n\n{![leave.png]Return|huntersGuildEls}`, "allComplete": `"You've completed all my quests for now."\n\n{![leave.png]Return|huntersGuildEls}`}, [
+                {
+                    "quest": "els1",
+                    "money": 10,
+                    "consumed": {
+                        "wood": 3
+                    },
+                    "message": `"Thanks for the firewood, this should help extend the duration of the fire for a few hours."\n\n{![leave.png]Return|huntersGuildEls}`
+                }
+            ])
+        }
+    }
+
+    static huntersGuildEls_askGuild() {
+        return `"The hunters' guild was founded years ago by a small group of people who wished to research the forest. I was appointed as the leader a short while after the guild was founded."\n\n"The forest is quite vast making exploration difficult. We still aren't aware of all the creatures in the forest."\n\n{![leave.png]Return|huntersGuildEls}`
+    }
+
+    static huntersGuildEls_askForest() {
+        return `"The forest is home to many creatures. Some harmless, some extremely dangerous. Generally the outskirts of the forest are safe so I suggest refraining from going in too deep unless you're strong enough."\n\n{![leave.png]Return|huntersGuildEls}`
+    }
+
+    static huntersGuildEls_askQuests() {
+        checks['huntersGuildAskQuest'] = true
+        return `"Quests?"\n\n"I could probably give you a few quests to collect resources, obviously you'll be paid for them. Talk to me again if you're interested."\n\n{![leave.png]Return|huntersGuildEls}`
+    }
+
+    static forestLayer2() {
+        return `You can see the entrance of the forest in the distance.\n\n{![arrow_left.png]Walk towards the exit|forestLayer1|300(Forest Entrance)}`
     }
 }
 
@@ -3567,10 +3907,13 @@ function processText(text) {
                 if (splitLinks[num][3] == undefined || splitLinks[num][3] == 0) {
                     sceneManager(splitLinks[num][2])
                 } else {
-                    let arrival = Math.ceil(time + Number(splitLinks[num][3]) / getMovementSpeed())
-                    processText(`You are walking towards the ${splitLinks[num][1].replace(imageRegex, "")}. You'll arrive at ${colorGen("#ccccff", formatTime(arrival, true))}`)
+                    const distance = Number(splitLinks[num][3].split("(")[0])
+                    let walkTextOverride
+                    if (splitLinks[num][3].includes("(")) {walkTextOverride = splitLinks[num][3].split("(")[1].slice(0, -1)}
+                    let arrival = Math.ceil(time + Number(distance) / getMovementSpeed())
+                    processText(`You are walking towards the ${colorGen("#99bbee", walkTextOverride || splitLinks[num][1].replace(imageRegex, ""))}. You'll arrive at ${colorGen("#ccccff", formatTime(arrival, true))}`)
                     travelInfo['destination'] = splitLinks[num][2]
-                    travelInfo['distance'] = Number(splitLinks[num][3])
+                    travelInfo['distance'] = Number(distance)
                 }
                 playTransition()
             })
@@ -3581,6 +3924,9 @@ function processText(text) {
 
 function sceneManager(selected) {
     const selectedScene = scenes[selected]()
+    if (sceneRegions[selected]) {
+        region = sceneRegions[selected]
+    }
     processText((prependText || "") + selectedScene)
     prependText = ""
     if (sceneEndFunctions[selected]) {sceneEndFunctions[selected]()}
@@ -3601,8 +3947,8 @@ function makeSave() { // Optimisation at all costs
         money, time, health, xp, playerTitle, battleStats, skills, energy, noSleepTime, effects, titleScores, achievements, // Stats
         inventory, inventoryNonStackable, inventoryNonStackableIncrement, storage, storageNonStackable, storageAccess, shopStorage, // Inventory
         combatData, equipment, team, arenaData, // Combat
-        oldScene, currentScene, sceneText, // Scenes
-        quests, completedQuests, checks, // Quests
+        oldScene, currentScene, sceneText, region, // Scenes
+        quests, completedQuests, checks, questProgression, // Quests
         stats, // Stats
         knownRecipes, craftInfo, craftingSelection, // Crafting
         exploreData, travelInfo, // Exploration
@@ -3643,6 +3989,7 @@ function makeSave() { // Optimisation at all costs
     removeEmpty("quests", base)
     removeEmpty("completedQuests", base)
     removeEmpty("checks", base)
+    removeEmpty("questProgression", base)
 
     // Crafting
     if (base['craftInfo']['recipe'] == null && base['craftInfo']['selected'] == null) {base['craftInfo'] = undefined}
@@ -3671,7 +4018,7 @@ function saveToLocal(dict, slot="save1") {
     window.localStorage.setItem(slot, packed)
 }
 
-function exportDict(dict, filename="proto26.sav") {
+function exportDict(dict, filename="Arkivia.sav") {
     const msgpackData = MessagePack.encode(dict)
     const packed = LZString.compressToUint8Array(String.fromCharCode.apply(null, msgpackData))
     const blob = new Blob([packed], {type: "application/octet-stream"})
@@ -3686,7 +4033,7 @@ function exportDict(dict, filename="proto26.sav") {
 
 async function importDict() {
     const [fileHandle] = await window.showOpenFilePicker({
-        types: [{description: "Proto26 Save", accept: {"application/octet-stream": [".sav"]}}]
+        types: [{description: "Arkivia Save", accept: {"application/octet-stream": [".sav"]}}]
     })
     const file = await fileHandle.getFile()
     const arrayBuffer = await file.arrayBuffer()
@@ -3706,7 +4053,7 @@ function loadFromLocal(slot="save1") {
 }
 
 function versionCompare(v1, v2) {
-    return v1.localeCompare(v2, undefined, { numeric: true }) < 0;
+    return v1.localeCompare(v2, undefined, {"numeric": true}) < 0
 }
 
 function loadSave(dict) {
@@ -3718,7 +4065,16 @@ function loadSave(dict) {
         if (versionCompare(dict['version'], "0.19")) {
             dict['stats']['totalKills'] = Object.values(dict['stats']['kills']).reduce((acc, val) => acc + val, 0)
         }
-
+        if (versionCompare(dict['version'], "0.20")) {
+            if (dict.checks?.dojoQuestIndex) {
+                dict['questProgression'] = {"dojo": dict['checks']['dojoQuestIndex']}
+                delete dict['checks']['dojoQuestIndex']
+            }
+            if (dict['combatData']) {
+                dict['combatData']['enemyEffects'] = {}
+            }
+        }
+        
         // Stats
         time = dict['time'] ?? time
         battleStats = dict['battleStats'] ?? battleStats
@@ -3749,8 +4105,8 @@ function loadSave(dict) {
         }
 
         if (dict['effects']) {
-            for (const [effect, time] of Object.entries(dict['effects'])) {
-                changeEffect(effect, time, true)
+            for (const [effect, data] of Object.entries(dict['effects'])) {
+                changeEffect(effect, data['duration'] || 0, true, data['properties'] || null)
             }
         }
         achievements = dict['achievements'] ?? achievements
@@ -3790,7 +4146,7 @@ function loadSave(dict) {
 
         if (combatData['enemy'] != null) {
             for (const stat of statTypes) {
-                document.getElementById(`enemy-stat-${stat}`).textContent = `${stat.charAt(0).toUpperCase()}${stat.slice(1)}: ${formatNumber(combatData['enemyStats'][stat])}`
+                document.getElementById(`enemy-stat-${stat}`).textContent = `${capitaliseFirst(stat)}: ${formatNumber(combatData['enemyStats'][stat])}`
             }
 
             document.getElementById("enemy-name").textContent = enemyData[combatData['enemy']]['name']
@@ -3799,17 +4155,26 @@ function loadSave(dict) {
             document.getElementById("attack-info-left").style.display = ""
             document.getElementById("attack-info-divider").style.display = ""
             document.getElementById("attack-info-right").style.display = ""
+
+            if (combatData['enemyEffects']) {
+                for (const [effect, data] of Object.entries(dict['combatData']['enemyEffects'])) {
+                    delete combatData['enemyEffects'][effect]
+                    changeEnemyEffect(effect, data['duration'] || 0, true)
+                }
+            }
         }
 
         // Scenes
         oldScene = dict['oldScene'] ?? oldScene
         currentScene = dict['currentScene'] ?? currentScene
         sceneText = dict['sceneText'] ?? sceneText
+        region = dict['region'] ?? region
 
         // Quests
         quests = dict['quests'] ?? quests
         completedQuests = dict['completedQuests'] ?? completedQuests
         checks = dict['checks'] ?? checks
+        questProgression = dict['questProgression'] ?? questProgression
 
         if (dict['quests']) {
             for (const quest in dict['quests']) {

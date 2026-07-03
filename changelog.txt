@@ -1,3 +1,27 @@
+v0.20
+- Make positive stat modifiers use a plus symbol
+- Display stats in title when tab is unfocused
+- Change stat/m to stat/s to avoid confusion
+- Update stat bars to use number formatter for text
+- Change continue in scene chains to next for consistency
+- Change game name
+- Add new building in forest
+- Fix missing outdoors flags
+- Change quest completion icon
+- Added regions to scenes
+- Made leaving quest givers more consistent
+- Fixed quest giving wrong rewards
+- Allow for storing data in effects
+- Add more enemies
+- Refactor effects system
+- Add new searching area
+- Add new resources
+- Add new effect
+- Clear effects on death
+- Fix number formatter for negative numbers
+- Add new areas
+- Add support for overriding walking text
+
 v0.19
 - Fix number formatting
 - Fix enemy stat display
@@ -172,7 +196,7 @@ v0.2
 
 v0.1.1
 - Fix code inconsistencies
-- Addded training skill
+- Added training skill
 - Implement scene functions
 - Implement fighting skill
 - Fix death check
