@@ -14,7 +14,7 @@
     <div id="center">
         <div id="center-top">
             <span id="weather" style="color: #bbbbbb; background-color: #383838;">Clear</span>
-            <span id="time">Monday 1900/01/01 07:00</span>
+            <span id="time">Monday 1600/01/01 07:00</span>
         </div>
         <div id="main-transition"></div>
         <div id="main"></div>
@@ -41,18 +41,17 @@
         </div>
         <div id="player-info-divider"></div>
         <div id="player-info-right">
-            <div id="stat-str" data-tooltip-title="Strength" data-tooltip-text="Increases damage dealt">Str: 1.00</div>
-            <div id="stat-def" data-tooltip-title="Defense" data-tooltip-text="Reduces incoming damage">Def: 1.00</div>
-            <div id="stat-spd" data-tooltip-title="Speed" data-tooltip-text="Increases chances of hitting">Spd: 1.00</div>
-            <div id="stat-dex" data-tooltip-title="Dexterity" data-tooltip-text="Increases chances of dodging attacks">Dex: 1.00</div>
-            <div id="stat-total" data-tooltip-title="Total" data-tooltip-text="Displays the total of all your stats combined">Ttl: 1.00</div>
+            <div id="stat-str" data-tooltip-title="Strength" data-tooltip-special="stat" data-tooltip-text="Increases damage dealt">Str: 1</div>
+            <div id="stat-def" data-tooltip-title="Defense" data-tooltip-special="stat" data-tooltip-text="Reduces incoming damage">Def: 1</div>
+            <div id="stat-spd" data-tooltip-title="Speed" data-tooltip-special="stat" data-tooltip-text="Increases chances of hitting">Spd: 1</div>
+            <div id="stat-dex" data-tooltip-title="Dexterity" data-tooltip-special="stat" data-tooltip-text="Increases chances of dodging attacks">Dex: 1</div>
+            <div id="stat-total" data-tooltip-title="Total" data-tooltip-text="Displays the total of all your stats combined">Ttl: 4</div>
         </div>
     </div>
     <div id="sidebar">
         <div id="menu-buttons-holder">
             <button class="menu-button" id="inventory-button" style="border-color: #7777cc;">Inventory</button>
             <button class="menu-button" id="skills-button">Skills</button>
-            <button class="menu-button" id="storage-button" style="display: none;">Storage</button>
             <button class="menu-button" id="quests-button" style="display: none;">Quests</button>
             <button class="menu-button" id="achievements-button" style="display: none;">Achievements</button>
             <button class="menu-button" id="debug-button" style="display: none;">Debug</button>
@@ -107,11 +106,6 @@
             <div id="skill-table"></div>
         </div>
 
-        <div class="sidebar-menu" id="sidebar-menu-storage" style="display: none;">
-            <div class="sidebar-menu-title">Storage</div>
-            <!-- <div id="storage-table"></div> -->
-        </div>
-
         <div class="sidebar-menu" id="sidebar-menu-quests" style="display: none;">
             <div class="sidebar-menu-title">Quests</div>
             <div id="quests-table"></div>
@@ -150,12 +144,13 @@
         </div>
     </div>
     <div id="bottombar">
-        <div id="game-title">Arkivia v?</div>
+        <a id="game-title" href="changelog.txt" target="_blank">Arkivia v?</a>
         <div id="bottombar-right">
             <div class="bottombar-text" id="last-save">Last Save: Never</div>
             <button class="bottombar-button" id="delete-save">Delete</button>
             <button class="bottombar-button" id="export">Export</button>
             <button class="bottombar-button" id="import">Import</button>
+            <button class="bottombar-button" id="settings-button">Settings</button>
         </div>
     </div>
     <div id="attack-info">
@@ -170,10 +165,10 @@
         <div id="enemy-effects-bar"></div>
         <div id="attack-info-divider" style="display: none;"></div>
         <div id="attack-info-right" style="display: none;">
-            <div id="enemy-stat-str" data-tooltip-title="Strength" data-tooltip-text="Increases damage dealt">Str: 1.00</div>
-            <div id="enemy-stat-def" data-tooltip-title="Defense" data-tooltip-text="Reduces incoming damage">Def: 1.00</div>
-            <div id="enemy-stat-spd" data-tooltip-title="Speed" data-tooltip-text="Increases chances of hitting">Spd: 1.00</div>
-            <div id="enemy-stat-dex" data-tooltip-title="Dexterity" data-tooltip-text="Increases chances of dodging attacks">Dex: 1.00</div>
+            <div id="enemy-stat-str" data-tooltip-title="Strength" data-tooltip-text="Increases damage dealt">Str: 1</div>
+            <div id="enemy-stat-def" data-tooltip-title="Defense" data-tooltip-text="Reduces incoming damage">Def: 1</div>
+            <div id="enemy-stat-spd" data-tooltip-title="Speed" data-tooltip-text="Increases chances of hitting">Spd: 1</div>
+            <div id="enemy-stat-dex" data-tooltip-title="Dexterity" data-tooltip-text="Increases chances of dodging attacks">Dex: 1</div>
         </div>
     </div>
     <div id="log"></div>
@@ -181,5 +176,9 @@
         <div id="tooltip-title"></div>
         <hr id="tooltip-hr">
         <div id="tooltip-text"></div>
+    </div>
+    <div id="settings" style="display: none;">
+        <div id="settings-categories"></div>
+        <div id="settings-options"></div>
     </div>
 </body>

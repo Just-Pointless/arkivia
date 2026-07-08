@@ -1,4 +1,4 @@
-const VERSION = "0.20"
+const VERSION = "0.21"
 
 document.getElementById("game-title").textContent = `Arkivia v${VERSION}`
 
@@ -745,20 +745,20 @@ function getDay(timeNow=time) {
     return Math.ceil((timeNow + 1) / 1440)
 }
 
-function xpToLevel(xp, decimals = false, r = 1.1) {
+function xpToLevel(xp, decimals = false, r=1.1) {
     let n = Math.log((xp * (r - 1)) / 50 + 1) / Math.log(r)
     return decimals ? n : Math.floor(n)
 }
 
-function levelToXp(level, r = 1.1) {
+function levelToXp(level, r=1.1) {
     return 50 * (Math.pow(r, level) - 1) / (r - 1)
 }
 
-function xpForLevel(level, r = 1.1) {
+function xpForLevel(level, r=1.1) {
     return levelToXp(level + 1, r) - levelToXp(level, r)
 }
 
-function xpIntoLevel(xp, r = 1.1) {
+function xpIntoLevel(xp, r=1.1) {
     const level = xpToLevel(xp, false, r)
     const levelStartXp = levelToXp(level, r)
     return Math.max(0, xp - levelStartXp)
@@ -1130,6 +1130,7 @@ function insertLog(content, tooltip=null, id=null) {
 // }
 
 function playTransition() {
+    if (settings['sceneTransitions'] === false) {return}
     let transition = document.getElementById("main-transition")
     transition.style.zIndex = 2
     transition.style.opacity = 0
@@ -1324,11 +1325,15 @@ function formatNumber(num, round=false, lowPrecision=false) {
 }
 
 function englishifyNumber(n) {
-    var special = ["zeroth","first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth", "eleventh", "twelfth", "thirteenth", "fourteenth", "fifteenth", "sixteenth", "seventeenth", "eighteenth", "nineteenth"]
+    var special = ["zeroth", "first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth", "eleventh", "twelfth", "thirteenth", "fourteenth", "fifteenth", "sixteenth", "seventeenth", "eighteenth", "nineteenth"]
     var deca = ["twent", "thirt", "fort", "fift", "sixt", "sevent", "eight", "ninet"]
     if (n < 20) return special[n]
-    if (n%10 === 0) return deca[Math.floor(n/10)-2] + "ieth"
-    return deca[Math.floor(n/10)-2] + "y-" + special[n%10]
+    if (n % 10 === 0) return deca[Math.floor(n / 10) - 2] + "ieth"
+    return deca[Math.floor(n / 10) - 2] + "y-" + special[ n% 10]
+}
+
+function formatString(string, values) { // For future use
+    return string.replace(/\$\{(\w+)\}/g, (_, key) => values[key])
 }
 
 function getMovementSpeed() {
@@ -1353,7 +1358,7 @@ function getRandomLoot(weightedDict) {
     }
 }
 
-function createItemDiv(item, type = "inventory", stackable = true, increment = null) {
+function createItemDiv(item, type="inventory", stackable=true, increment=null) {
     const isInventory = type === "inventory"
 
     const idPrefix = isInventory ? "item" : "storage-item"
@@ -1364,6 +1369,7 @@ function createItemDiv(item, type = "inventory", stackable = true, increment = n
     itemParent.id = stackable ? `${idPrefix}-${item}` : `${idPrefix}-${item}_${increment}`
     itemParent.setAttribute("data-tooltip-title", itemData[item]['name'])
     itemParent.setAttribute("data-tooltip-text", itemData[item]['desc'])
+    itemParent.setAttribute("data-class", itemData[item]['class'])
     if (itemData[item]['combat']) {itemParent.setAttribute("data-tooltip-special", "equipment")}
 
     const itemText = document.createElement("span")
@@ -1379,8 +1385,14 @@ function createItemDiv(item, type = "inventory", stackable = true, increment = n
         itemQuantity.textContent = `x${quantitySource[item]}`
         itemParent.appendChild(itemQuantity)
     }
-
-    document.getElementById(isInventory ? "inventory-table" : "storage-table").appendChild(itemParent)
+    const targetTable = document.getElementById(isInventory ? "inventory-table" : "storage-table")
+    for (const child of targetTable.children) {
+        if (itemData[item]['class'] < child.getAttribute("data-class") || (itemData[item]['class'] === child.getAttribute("data-class") && itemData[item]['name'] < child.getAttribute("data-tooltip-title"))) {
+            targetTable.insertBefore(itemParent, child)
+            return
+        }
+    }
+    targetTable.appendChild(itemParent)
 }
 
 function genItemLogText(item, amount) {
@@ -1511,6 +1523,7 @@ function generateStorageMenu() {
     for (const [id, data] of Object.entries(storageNonStackable)) {
         const item = data['name']
         // changeStorage(item, 1, id, data)
+        createItemDiv(item, "storage", false, id)
     }
 }
 
@@ -1613,18 +1626,10 @@ function storageClickDetector(e) {
 function toggleStorageAccess(value) {
     if (value == true) {
         storageAccess = true
-        document.getElementById("storage-button").style.display = ""
         document.getElementById("inventory-table").addEventListener("click", itemClickDetector)
         document.getElementById("storage-table").addEventListener("click", storageClickDetector)
     } else {
         storageAccess = false
-        document.getElementById("storage-button").style.display = "none"
-        if (document.getElementById("sidebar-menu-storage").style.display != "none") {
-            document.getElementById("sidebar-menu-storage").style.display = "none"
-            document.getElementById("sidebar-menu-inventory").style.display = ""
-            document.getElementById("inventory-button").style.borderColor = "#7777cc"
-            document.getElementById("storage-button").style.borderColor = ""
-        }
         document.getElementById("inventory-table").removeEventListener("click", itemClickDetector)
         document.getElementById("storage-table").removeEventListener("click", storageClickDetector)
     }
@@ -1650,8 +1655,8 @@ const weatherData = {
     "clear": {
         "changes": {
             "sunny": {"chance": 40, "check": function() {return ["morning", "afternoon"].includes(getTimeName())}},
-            "foggy": {"chance": function() {return getTimeName() == "night" ? 40 : 8}},
-            "overcast": {"chance": 10},
+            "foggy": {"chance": function() {return getTimeName() == "night" ? 30 : 8}},
+            "overcast": {"chance": 15},
             "noChange": {"chance": 10000}
         },
         "minTime": 30
@@ -1702,7 +1707,7 @@ function processWeatherWeights(changes, multi=1) {
     for (const [weather, data] of Object.entries(changes)) {
         if (data['check'] && !data['check']()) {continue}
 
-        weights[weather] = typeof data.chance == "function" ? data['chance']() : data['chance']
+        weights[weather] = typeof data['chance'] == "function" ? data['chance']() : data['chance']
     }
 
     if (weights['noChange']) {
@@ -1965,16 +1970,61 @@ function calcStatModifier(stat=null) {
         }
     }
 
+    
+    // Decrease
     multi *= equipmentEndNegative
 
-    // Decrease
     if (energy < 35) {
-        multi *= (energy / 70 + 0.5)
+        multi *= energy / 70 + 0.5
     }
     if (stat == "spd") {
         if (weather == "foggy") {multi *= 0.75}
     }
     return multi
+}
+
+function getStatModifierInfo(stat=null) {
+    const data = {
+        "positive": [],
+        "negative": []
+    }
+    let equipmentEndNegative = 1
+    for (const item of Object.values(equipment)) {
+        if (item != null) {
+            change = getEquipmentStatBuff(item, stat)
+            if (change > 0) {
+                data['positive'].push({"source": itemData[item[0]]['name'], "change": change})
+            } else if (change < 0) {
+                data['negative'].push({"source": itemData[item[0]]['name'], "change": 1 + change})
+            }
+        }
+    }
+
+    if (energy < 35) {
+        data['negative'].push({"source": "Energy", "change": energy / 70 + 0.5})
+    }
+    if (stat == "spd") {
+        if (weather == "foggy") {data['negative'].push({"source": "Foggy Weather", "change": 0.75})}
+    }
+    return data
+}
+
+function getStatModifierBreakdown(stat) {
+    const data = getStatModifierInfo(stat)
+    output = []
+    for (const effect of data['positive']) {
+        output.push(`${colorGen("#00ff00", `+${formatNumber(effect['change'] * 100, false, true)}%`)} ${effect['source']}`)
+    }
+    // if (data['positive'].length > 0 && data['negative'].length > 0) {
+    //     output.push("")
+    // }
+    for (const effect of data['negative']) {
+        output.push(`${colorGen("#ff0000", `-${formatNumber((1 - effect['change']) * 100, false, true)}%`)} ${effect['source']}`)
+    }
+
+    const modifierPercentage = calcStatModifier(stat) * 100 - 100
+    output.push(`Total: ${modifierPercentage > 0 ? "+" : ""}${formatNumber(modifierPercentage)}%`)
+    return output.join("\n")
 }
 
 function calcEnemyStatDebuff(stat=null) {
@@ -2151,6 +2201,8 @@ function giveQuest(questName, complete=false) {
                     goal.textContent = `${enemyData[stat]['name']}: `
                 } else if (type == "stats") {
                     goal.textContent = `${stat.replace("str", "Strength").replace("def", "Defense").replace("spd", "Speed").replace("dex", "Dexterity")}: ` // Kinda bad but it works for now
+                } else if (type == "items") {
+                    goal.textContent = `${itemData[stat]['name']}: `
                 } else {
                     goal.textContent = `${stat}: `
                 }
@@ -2248,15 +2300,58 @@ function trainingAreaHandler(stat, gymName="none") {
     }
 }
 
-function changeBattlestat(stat, amount, absolute=false) {
+function calcTrainingModifier(stat=null) {
     let multi = 1
-    if (absolute == false) {
-        multi = multi * (1 + getSkillLevel("training") * 0.02)
-        multi = multi * calcEnergyDebuff()
-        if (effects['exercisePill']) {
-            multi *= 1.5
-        }
+    // Positive
+    multi += getSkillLevel("training") * 0.02
+    if (effects['exercisePill']) {multi += 0.5}
+
+    // Negative
+    if (energy < 35) {
+        multi *= energy / 70 + 0.5
     }
+    return multi
+}
+
+function getTrainingModifierInfo(stat=null) {
+    const data = {
+        "positive": [],
+        "negative": []
+    }
+
+    if (getSkillLevel("training") > 0) {
+        data['positive'].push({"source": "Training Skill", "change": getSkillLevel("training") * 0.02})
+    }
+
+    if (effects['exercisePill']) {data['positive'].push({"source": "Exercise Pill", "change": 0.5})}
+
+    if (energy < 35) {
+        data['negative'].push({"source": "Energy", "change": energy / 70 + 0.5})
+    }
+
+    return data
+}
+
+function getTrainingModifierBreakdown(stat) {
+    const data = getTrainingModifierInfo(stat)
+    output = []
+    for (const effect of data['positive']) {
+        output.push(`${colorGen("#00ff00", `+${formatNumber(effect['change'] * 100, false, true)}%`)} ${effect['source']}`)
+    }
+    // if (data['positive'].length > 0 && data['negative'].length > 0) {
+    //     output.push("")
+    // }
+    for (const effect of data['negative']) {
+        output.push(`${colorGen("#ff0000", `-${formatNumber((1 - effect['change']) * 100, false, true)}%`)} ${effect['source']}`)
+    }
+
+    const modifierPercentage = calcTrainingModifier(stat) * 100 - 100
+    output.push(`Total: ${modifierPercentage > 0 ? "+" : ""}${formatNumber(modifierPercentage)}%`)
+    return output.join("\n")
+}
+
+function changeBattlestat(stat, amount, absolute=false) {
+    let multi = absolute == false ? calcTrainingModifier() : 1
     const oldRank = getRank()
     battleStats[stat] += amount * multi
     updateBattlestats(stat)
@@ -2937,6 +3032,16 @@ function updateTooltip() {
             if (tooltipItemData != undefined) {
                 if (tooltipItemData['damage']) {tooltipText += `<hr>Dmg: ${colorGen("#ff0000", tooltipItemData['damage'])}`}
                 if (tooltipItemData['durability']) {tooltipText += `\nDurability: ${colorGen("#ffff00", tooltipItemData['durability'])}`}
+            }
+        } else if (tooltipSpecial == "stat") {
+            const stat = activeTarget.id.replace("stat-", "")
+            const statModBreakdown = getStatModifierBreakdown(stat)
+            const trainingModBreakdown = getTrainingModifierBreakdown(stat)
+            if (statModBreakdown) {
+                tooltipText += `<hr><b>Stat Modifiers</b>\n${statModBreakdown}`
+            }
+            if (trainingModBreakdown && trainingModBreakdown != "Total: 0%") {
+                tooltipText += `<hr><b>Training Modifiers</b>\n${trainingModBreakdown}`
             }
         }
 
@@ -3663,7 +3768,7 @@ class scenes {
     }
 
     static grassPlains() {
-        return `You are standing in the grass plains. You notice some slimes jumping around.\n\n{Escape|grassPlains|0|grassPlainsEscape}\n\n{Town Gates|townGatesNorthExterior|500|endFight}\n{Forest|forestLayer1|1000|endFight}`
+        return `You are standing in the grass plains. You notice some slimes jumping around.\n\n{![leave.png]Escape|grassPlains|0|grassPlainsEscape}\n\n{![enter.png]Town Gates|townGatesNorthExterior|500|endFight}\n{![forest.png]Forest|forestLayer1|1000|endFight}`
     }
 
     static forestLayer1() {
@@ -3879,22 +3984,34 @@ function processText(text) {
             if (labelParts.length > 1) {
                 labelParts.forEach(function(part, index) {
                     if (index % 2 == 0) {
-                        let span = document.createElement("span")
-                        span.innerHTML = part
-                        button.appendChild(span)
+                        if (part.length > 0) {
+                            let span = document.createElement("span")
+                            if (!settings['keyboardNavigation']) {
+                                span.innerHTML = part
+                            } else {
+                                span.innerHTML = `(${num + 1}) ${part}`
+                            }
+                            button.appendChild(span)
+                        }
                     } else {
-                        let img = document.createElement("img")
-                        img.src = "img/" + part
-                        img.style.display = "inline-block"
-                        img.style.width = "1.5em"
-                        img.style.height = "1.5em"
-                        img.style.marginRight = "6px"
-                        img.style.verticalAlign = "middle"
-                        button.appendChild(img)
+                        if (settings['sceneImages'] !== false) {
+                            let img = document.createElement("img")
+                            img.src = "img/" + part
+                            img.style.display = "inline-block"
+                            img.style.width = "1.5em"
+                            img.style.height = "1.5em"
+                            img.style.marginRight = "6px"
+                            img.style.verticalAlign = "middle"
+                            button.appendChild(img)
+                        }
                     }
                 })
             } else {
-                button.innerHTML = splitLinks[num][1]
+                if (!settings['keyboardNavigation']) {
+                    button.innerHTML = splitLinks[num][1]
+                } else {
+                    button.innerHTML = `(${num + 1}) ${splitLinks[num][1]}`
+                }
             }
             
             button.className = "main-link"
@@ -3932,12 +4049,153 @@ function sceneManager(selected) {
     if (sceneEndFunctions[selected]) {sceneEndFunctions[selected]()}
     oldScene = currentScene
     currentScene = selected
+    
+    trainingSession = {
+        "logId": null,
+        "gain": 0,
+        "stat": null
+    }
 }
+
+// Settings
+let settingsMenuLoaded = false
+var settings = loadFromLocal("arkivia-settings") || {}
+const eventListenerStorage = {}
+const settingsData = {
+    "sceneTransitions": {
+        "type": "toggle",
+        "text": "Scene Transitions",
+        "default": true
+    },
+    "sceneImages": {
+        "type": "toggle",
+        "text": "Scene Images",
+        "default": true
+    },
+    "keyboardNavigation": {
+        "type": "toggle",
+        "text": "Keyboard Navigation",
+        "default": false,
+        "on": function() {
+            if (!eventListenerStorage['keyboardNavigation']) {
+                eventListenerStorage['keyboardNavigation'] = function(e) {
+                    if (e.repeat || e.ctrlKey) {return}
+                    if (!isNaN(parseInt(e.key))) {
+                        const target = document.getElementById(`button${parseInt(e.key) - 1}`)
+                        if (target) {
+                            target.click()
+                        }
+                    }
+                }
+
+                document.addEventListener("keydown", eventListenerStorage['keyboardNavigation'])
+            }
+        },
+        "off": function() {
+            if (eventListenerStorage['keyboardNavigation']) {
+                document.removeEventListener("keydown", eventListenerStorage['keyboardNavigation'])
+                delete eventListenerStorage['keyboardNavigation']
+            }
+        }
+    }
+}
+const settingsCategories = {
+    "interface": {
+        "name": "Interface",
+        "settings": [
+            "sceneTransitions",
+            "sceneImages"
+        ]
+    },
+    "accessibility": {
+        "name": "Accessibility",
+        "settings": [
+            "keyboardNavigation"
+        ]
+    }
+}
+
+for (const [setting, value] of Object.entries(settings)) {
+    if (settingsData[setting]) {
+        if (settingsData[setting]['type'] == "toggle" && value != settingsData[setting]['default']) {
+            if (value == true && settingsData[setting]['on']) {
+                settingsData[setting]['on']()
+            } else if (value == false && settingsData[setting]['off']) {
+                settingsData[setting]['off']()
+            }
+        }
+    }
+}
+
+document.getElementById("settings-button").addEventListener("click", function() {
+    if (settingsMenuLoaded == false) {
+        settingsMenuLoaded = true
+        for (const [submenu, data] of Object.entries(settingsCategories)) {
+            const category = document.createElement("button")
+            category.className = "settings-category"
+            category.textContent = data['name']
+
+            category.addEventListener("click", function() {
+                const settingsOptionsElem = document.getElementById("settings-options")
+                settingsOptionsElem.replaceChildren()
+                
+                const settingsOptionsTitle = document.createElement("div")
+                settingsOptionsTitle.className = "settings-options-title"
+                settingsOptionsTitle.textContent = data['name']
+                settingsOptionsElem.appendChild(settingsOptionsTitle)
+
+                for (const option of data['settings']) {
+                    const values = settingsData[option]
+                    if (values['type'] == "toggle") {
+                        const holder = document.createElement("div")
+                        holder.className = "settings-option-holder"
+                        
+                        const toggle = document.createElement("input")
+                        toggle.type = "checkbox"
+                        toggle.className = "settings-option-checkbox"
+                        toggle.checked = settings[option] != undefined ? settings[option] : values['default'] || false
+
+                        toggle.addEventListener("change", function() {
+                            if (toggle.checked != values['default']) {
+                                settings[option] = toggle.checked
+                            } else {
+                                delete settings[option]
+                            }
+
+                            if (toggle.checked && values['on']) {values['on']()}
+                            if (!toggle.checked && values['off']) {values['off']()}
+                            saveToLocal(settings, "arkivia-settings")
+                        })
+
+                        holder.appendChild(toggle)
+
+                        const text = document.createElement("span")
+                        text.textContent = values['text']
+                        holder.appendChild(text)
+
+
+                        settingsOptionsElem.appendChild(holder)                        
+                    }
+                }
+            })
+
+            document.getElementById("settings-categories").appendChild(category)
+        }
+    }
+
+    const settingsElem = document.getElementById("settings")
+    if (settingsElem.style.display == "none") {
+        settingsElem.style.display = ""
+    } else {
+        settingsElem.style.display = "none"
+    }
+})
 
 function objectEmpty(obj) {
     return Object.keys(obj).length === 0
 }
 
+// Saves
 function makeSave() { // Optimisation at all costs
     function removeEmpty(key, obj) {
         if (objectEmpty(obj[key])) {obj[key] = undefined}
@@ -4015,7 +4273,7 @@ function makeSave() { // Optimisation at all costs
 function saveToLocal(dict, slot="save1") {
     const msgpackData = MessagePack.encode(dict)
     const packed = LZString.compressToBase64(String.fromCharCode.apply(null, msgpackData))
-    window.localStorage.setItem(slot, packed)
+    localStorage.setItem(slot, packed)
 }
 
 function exportDict(dict, filename="Arkivia.sav") {
@@ -4045,9 +4303,10 @@ async function importDict() {
 }
 
 function loadFromLocal(slot="save1") {
-    const save = window.localStorage.getItem(slot)
+    const save = localStorage.getItem(slot)
+    if (!save) {return undefined}
     const decompressed = LZString.decompressFromBase64(save)
-    const bytes = new Uint8Array(decompressed.split('').map(char => char.charCodeAt(0)))
+    const bytes = new Uint8Array(decompressed.split("").map(char => char.charCodeAt(0)))
     const dict = MessagePack.decode(bytes)
     return dict
 }
@@ -4057,6 +4316,7 @@ function versionCompare(v1, v2) {
 }
 
 function loadSave(dict) {
+    const startTime = performance.now()
     try {
         // Migrations
         if (versionCompare(dict['version'], "0.17")) {
@@ -4225,6 +4485,8 @@ function loadSave(dict) {
 
         document.getElementById("log").replaceChildren()
         itemLogStackData = {"id": null, "item": null, "amount": null, "type": null}
+
+        insertLog(colorGen("#aaaaaa", `Loaded in ${(performance.now() - startTime).toFixed()}ms`))
     } catch (error) {
         saveEnabled = false
         insertLog(colorGen("#ff0000", `Loading failed: ${error}`))

@@ -1,3 +1,18 @@
+v0.21
+- Fix quest item requirements being lowercase
+- Fix resetting of training area text
+- Add missing icons to scenes
+- Made clicking version text open changelog
+- Add stat modifier breakdown
+- Add training modifier breakdown
+- Fix year showing 1900 on first tick
+- Add settings menu
+- Remove old storage menu
+- Add inventory ordering
+- Fix storage not displaying unstackable items
+- Add save load time log
+- Slightly reduce foggy weather weighting and increase overcast chance
+
 v0.20
 - Make positive stat modifiers use a plus symbol
 - Display stats in title when tab is unfocused
